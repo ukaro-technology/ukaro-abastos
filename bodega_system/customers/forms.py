@@ -11,11 +11,12 @@ class CustomerForm(forms.ModelForm):
     class Meta:
         model = Customer
         fields = [
-            'name', 'phone', 'email', 'address',
+            'name', 'cedula', 'phone', 'email', 'address',
             'credit_limit_usd', 'notes', 'is_active'
         ]
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-input'}),
+            'cedula': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'V-12345678'}),
             'phone': forms.TextInput(attrs={'class': 'form-input'}),
             'email': forms.EmailInput(attrs={'class': 'form-input'}),
             'address': forms.Textarea(attrs={'class': 'form-input', 'rows': 3}),
@@ -23,6 +24,7 @@ class CustomerForm(forms.ModelForm):
             'notes': forms.Textarea(attrs={'class': 'form-input', 'rows': 3}),
         }
         labels = {
+            'cedula': 'Cédula',
             'credit_limit_usd': 'Límite de Crédito (USD)',
         }
         help_texts = {
