@@ -23,8 +23,8 @@ def product_list(request):
     search_query = request.GET.get('q')
     stock_filter = request.GET.get('stock')
 
-    # Consulta base
-    products = Product.objects.all()
+    # Consulta base — solo productos activos, con category precargada
+    products = Product.objects.select_related('category').filter(is_active=True)
 
     # Aplicar filtros
     if category_id:
@@ -73,10 +73,10 @@ def product_detail(request, pk):
     product = get_object_or_404(Product, pk=pk)
 
     # Obtener historial de ajustes
-    adjustments = product.adjustments.all().order_by('-adjusted_at')[:10]
+    adjustments = product.adjustments.select_related('adjusted_by').order_by('-adjusted_at')[:10]
 
     # Obtener historial de ventas
-    sales = product.sale_items.all().order_by('-sale__date')[:10]
+    sales = product.sale_items.select_related('sale__customer').order_by('-sale__date')[:10]
 
     # ⭐ NUEVO: Pasar información de permisos
     is_admin = request.user.is_admin or request.user.is_superuser
@@ -182,15 +182,14 @@ def product_delete(request, pk):
 @inventory_access_required
 def category_list(request):
     """Vista para listar categorías - Empleados y Administradores (Solo Lectura para Empleados)"""
-    categories = Category.objects.all().order_by('name')
-
-    categories_with_count = []
-    for category in categories:
-        product_count = Product.objects.filter(category=category).count()
-        categories_with_count.append({
-            'category': category,
-            'product_count': product_count
-        })
+    # Una sola query con COUNT en lugar de N+1
+    categories_qs = Category.objects.annotate(
+        product_count=Count('products')
+    ).order_by('name')
+    categories_with_count = [
+        {'category': c, 'product_count': c.product_count}
+        for c in categories_qs
+    ]
 
     # ⭐ NUEVO: Pasar información de permisos
     is_admin = request.user.is_admin or request.user.is_superuser
@@ -275,7 +274,7 @@ def category_delete(request, pk):
 @admin_required
 def adjustment_list(request):
     """Vista para listar ajustes de inventario - Solo Administradores"""
-    adjustments = InventoryAdjustment.objects.all().order_by('-adjusted_at')
+    adjustments = InventoryAdjustment.objects.select_related('product', 'adjusted_by').order_by('-adjusted_at')
     
     product_id = request.GET.get('product')
     adjustment_type = request.GET.get('type')

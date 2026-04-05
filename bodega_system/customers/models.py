@@ -36,6 +36,14 @@ class Customer(models.Model):
         verbose_name="Límite de Crédito (USD)",
         help_text="Límite principal en USD"
     )
+    cedula = models.CharField(
+        max_length=15,
+        unique=True,
+        blank=True,
+        null=True,
+        verbose_name="Cédula",
+        help_text="Número de cédula (V-XXXXXXXX o E-XXXXXXXX)"
+    )
     notes = models.TextField(
         blank=True,
         verbose_name="Notas"
