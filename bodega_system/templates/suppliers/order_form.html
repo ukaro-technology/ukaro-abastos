@@ -782,8 +782,11 @@
         document.addEventListener('alpine:initialized', () => {
             const managementFormTotal = document.querySelector('input[name="items-TOTAL_FORMS"]');
             const managementFormInitial = document.querySelector('input[name="items-INITIAL_FORMS"]');
-            const app = Alpine.$data(document.querySelector('[x-data="orderForm()"]'));
+            const formEl = document.querySelector('[x-data="orderForm()"]');
+            const app = formEl ? Alpine.$data(formEl) : null;
             const formsetContainer = document.getElementById('real-formset-fields');
+
+            if (!app || !formsetContainer) return;
 
             // Sanitize values to prevent HTML injection
             const sanitize = (value) => {
@@ -791,8 +794,8 @@
                 return String(value).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
             };
 
-            // Function to generate real HTML inputs for Django formset
-            // Handles 3 categories: deleted existing, remaining existing, new
+            // Generates the hidden input fields that Django's formset processor needs.
+            // Called at submit time (authoritative) and reactively (convenience).
             function generateFormsetFields(products) {
                 formsetContainer.innerHTML = '';
 
@@ -800,9 +803,7 @@
                 const existingItems = products.filter(p => p.itemId);
                 const newItems = products.filter(p => !p.itemId);
 
-                // INITIAL_FORMS = deleted + remaining existing (all have DB records)
                 const initialCount = deletedIds.length + existingItems.length;
-                // TOTAL_FORMS = all forms including new
                 const totalCount = initialCount + newItems.length;
 
                 if (managementFormTotal) managementFormTotal.value = totalCount;
@@ -866,18 +867,12 @@
                 });
             }
 
-            // Initial generation for edit mode (products already loaded in init())
-            generateFormsetFields(app.products);
-
-            // Update formset fields whenever products array or deletedItemIds changes
-            app.$watch('products', () => generateFormsetFields(app.products));
-            app.$watch('deletedItemIds', () => generateFormsetFields(app.products));
-            
-            // Generate fields on form submit
+            // CRITICAL: register submit handler FIRST — this is the authoritative bridge
+            // between Alpine state and Django's formset processor.
+            // Must run before any code that could throw, so it is always registered.
             const form = document.querySelector('form');
             if (form) {
                 form.addEventListener('submit', (e) => {
-                    // Validar todos los productos antes de enviar
                     const invalidProducts = app.products.filter((product) => {
                         if (!product.quantity || product.quantity <= 0) return true;
                         if (!product.purchasePrice || product.purchasePrice <= 0) return true;
@@ -897,9 +892,15 @@
                         return;
                     }
 
+                    // Regenerate fields with the final product state before Django receives them
                     generateFormsetFields(app.products);
                 });
             }
+
+            // Keep formset fields in sync as the user adds/removes products.
+            // Alpine.$data() returns the reactive proxy so Alpine.effect tracks changes.
+            // This is the correct external API — app.$watch does NOT exist on $data().
+            Alpine.effect(() => generateFormsetFields(app.products));
         });
         </script>
 
