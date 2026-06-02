@@ -16,6 +16,19 @@ ALLOWED_HOSTS = os.environ.get(
     '127.0.0.1,localhost'
 ).split(',')
 
+# Seguridad HTTPS — Nginx termina el TLS y reenvía las peticiones a Gunicorn.
+# Orígenes confiables para CSRF (necesario detrás de proxy con dominio HTTPS).
+CSRF_TRUSTED_ORIGINS = [
+    o for o in os.environ.get('CSRF_TRUSTED_ORIGINS', '').split(',') if o
+]
+# Django reconoce que la petición es HTTPS por la cabecera que envía Nginx.
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+# Endurecimiento solo en producción (la redirección 80->443 y HSTS las hace Nginx).
+if not DEBUG:
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+
 # Application definition
 INSTALLED_APPS = [
     'django.contrib.admin',

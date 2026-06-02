@@ -34,20 +34,33 @@ services:
     restart: always
     ports:
       - "80:80"
+      - "443:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - static_volume:/app/staticfiles:ro
       - media_volume:/app/media:ro
+      - certbot_conf:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
     depends_on:
       - web
     networks:
       - abastos_network
+
+  # Certbot — emite y renueva el certificado SSL de Let's Encrypt (reto webroot)
+  certbot:
+    image: certbot/certbot
+    container_name: abastos_certbot
+    volumes:
+      - certbot_conf:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
 
 volumes:
   postgres_data:
   static_volume:
   media_volume:
   backup_volume:
+  certbot_conf:
+  certbot_www:
 
 networks:
   abastos_network:
