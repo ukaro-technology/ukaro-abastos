@@ -23,8 +23,5 @@
 - [x] 2 bugs resueltos ✅ (2026-04-16)
 
 ## Última sesión
-2026-06-02: Subdominio abastos.ukarosoft.com con HTTPS completo. DNS (A record en
-Squarespace/Google) → 161.35.142.183. nginx con bloque SSL 443 + redirección + HSTS,
-docker-compose con servicio certbot + volúmenes, settings.py con SECURE_PROXY_SSL_HEADER
-y cookies seguras. Cert emitido (exp 2026-08-31), renovación cron + dry-run OK.
-Deploy quirúrgico vía scp de 3 archivos (NO git pull) para no tocar la divergencia del server.
+2026-06-05: [snapshot automático — 0
+0 commit(s)]
