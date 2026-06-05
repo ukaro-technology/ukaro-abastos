@@ -30,7 +30,8 @@ def customer_list(request):
         customers = customers.filter(
             Q(name__icontains=search_query) |
             Q(phone__icontains=search_query) |
-            Q(email__icontains=search_query)
+            Q(email__icontains=search_query) |
+            Q(cedula__icontains=search_query)
         )
     
     if credit_filter == 'with_credit':

@@ -2,12 +2,24 @@
 
 from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
+from django.http import JsonResponse
+from django.db import connection
 from django.db.models import Sum, Count, Q, F
 from django.db.models.functions import TruncDate
 from django.utils import timezone
 from datetime import timedelta
 
 from utils.decorators import is_admin, admin_required
+
+def health(request):
+    try:
+        connection.ensure_connection()
+        db_ok = True
+    except Exception:
+        db_ok = False
+    status = 200 if db_ok else 503
+    return JsonResponse({'status': 'ok' if db_ok else 'error', 'db': db_ok}, status=status)
+
 
 @admin_required
 def dashboard(request):

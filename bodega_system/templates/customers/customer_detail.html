@@ -47,6 +47,12 @@
                     <dt class="text-sm font-medium text-gray-500">Nombre:</dt>
                     <dd class="text-sm text-gray-900">{{ customer.name }}</dd>
                 </div>
+                {% if customer.cedula %}
+                <div class="flex justify-between py-1 border-b border-gray-200">
+                    <dt class="text-sm font-medium text-gray-500">Cédula:</dt>
+                    <dd class="text-sm text-gray-900">{{ customer.cedula }}</dd>
+                </div>
+                {% endif %}
                 {% if customer.phone %}
                 <div class="flex justify-between py-1 border-b border-gray-200">
                     <dt class="text-sm font-medium text-gray-500">Teléfono:</dt>

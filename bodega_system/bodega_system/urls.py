@@ -11,6 +11,9 @@ from . import views
 urlpatterns = [
     path('admin/', admin.site.urls),
     
+    # Health check — sin autenticación para monitoreo externo
+    path('health/', views.health, name='health'),
+
     # Dashboard
     path('', login_required(views.dashboard), name='dashboard'),
     

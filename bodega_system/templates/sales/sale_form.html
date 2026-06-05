@@ -323,13 +323,21 @@
                 </div>
                 <button
                     @click="completeSale"
-                    :disabled="items.length === 0"
+                    :disabled="items.length === 0 || submitting"
                     class="w-full bg-white text-blue-700 font-semibold py-3 px-4 rounded-lg text-base hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
                     <div class="flex items-center justify-center">
-                        <svg class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                        </svg>
-                        Completar Venta
+                        <template x-if="submitting">
+                            <svg class="animate-spin h-5 w-5 mr-2 text-blue-700" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                            </svg>
+                        </template>
+                        <template x-if="!submitting">
+                            <svg class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                        </template>
+                        <span x-text="submitting ? 'Procesando...' : 'Completar Venta'"></span>
                     </div>
                 </button>
             </div>
@@ -395,6 +403,7 @@
             // Estado de items
             items: [],
             barcode: '',
+            submitting: false,
 
             // Búsqueda por nombre (nuevo)
             nameSearch: '',
@@ -601,6 +610,7 @@
 
             // ── Completar venta ───────────────────────────────────────
             async completeSale() {
+                if (this.submitting) return;
                 if (this.items.length === 0) { alert('Agregue al menos un producto'); return; }
                 if (this.isCredit && !this.selectedCustomer) { alert('Para venta a crédito seleccione un cliente'); return; }
                 if (this.paymentMethod === 'mobile' && !this.mobileReference.trim()) {
@@ -608,6 +618,7 @@
                     return;
                 }
 
+                this.submitting = true;
                 const saleData = {
                     items: this.items.map(item => ({
                         product_id: item.id,
@@ -648,6 +659,8 @@
                     }
                 } catch (error) {
                     alert(error.message || 'Error al procesar la venta');
+                } finally {
+                    this.submitting = false;
                 }
             },
 

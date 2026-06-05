@@ -68,28 +68,32 @@ def product_by_barcode(request, barcode):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def customer_search(request):
-    """API para buscar clientes por nombre o teléfono"""
+    """API para buscar clientes por nombre, teléfono o cédula"""
     query = request.GET.get('q', '')
-    
+
     if not query:
         return JsonResponse({
             'customers': []
         })
-    
+
     try:
         # Importación aquí para evitar importación circular
         from customers.models import Customer
-        
+        from django.db.models import Q
+
         customers = Customer.objects.filter(
-            name__icontains=query
+            Q(name__icontains=query) |
+            Q(phone__icontains=query) |
+            Q(cedula__icontains=query)
         )[:10]  # Limitar a 10 resultados
-        
+
         result = []
         for customer in customers:
             result.append({
                 'id': customer.id,
                 'name': customer.name,
                 'phone': customer.phone,
+                'cedula': customer.cedula or '',
             })
         
         return JsonResponse({
