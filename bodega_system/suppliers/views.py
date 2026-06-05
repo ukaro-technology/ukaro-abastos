@@ -284,6 +284,20 @@ def order_create(request, exchange_rate=None):
 
         if form.is_valid():
             if formset.is_valid():
+                active_forms = [
+                    f for f in formset.forms
+                    if f.cleaned_data and not f.cleaned_data.get('DELETE', False)
+                ]
+                if not active_forms:
+                    messages.error(request, 'Debe agregar al menos un producto a la orden.')
+                    return render(request, 'suppliers/order_form.html', {
+                        'form': form,
+                        'formset': formset,
+                        'title': 'Nueva Orden de Compra',
+                        'current_exchange_rate': exchange_rate,
+                        'categories': Category.objects.all().order_by('name'),
+                        'unit_choices': Product.UNIT_TYPES,
+                    })
                 # exchange_rate ya está disponible por el decorator
                 try:
                     with transaction.atomic():
@@ -387,7 +401,6 @@ def order_create(request, exchange_rate=None):
         formset = SupplierOrderItemFormset()
     
     # Obtener categorías y opciones de unidad
-    from inventory.models import Category, Product
     categories = Category.objects.all().order_by('name')
     unit_choices = Product.UNIT_TYPES
 
