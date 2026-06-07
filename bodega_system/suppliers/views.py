@@ -263,27 +263,26 @@ def order_create(request, exchange_rate=None):
         form = SupplierOrderForm(request.POST, user=request.user)
         formset = SupplierOrderItemFormset(request.POST)
 
-        logger.debug("Processing order creation", extra={
-            'user_id': request.user.id,
-            'form_valid': form.is_valid(),
-            'formset_valid': formset.is_valid(),
-        })
+        form_valid = form.is_valid()
+        formset_valid = formset.is_valid()
 
-        if not form.is_valid():
-            logger.warning("Order form validation failed", extra={
-                'errors': str(form.errors),
-                'user_id': request.user.id,
-            })
+        if not form_valid:
+            logger.warning(
+                f"[order_create] form inválido — errores: {form.errors}"
+            )
 
-        if not formset.is_valid():
-            logger.warning("Order formset validation failed", extra={
-                'errors': str(formset.errors),
-                'non_form_errors': str(formset.non_form_errors()),
-                'user_id': request.user.id,
-            })
+        if not formset_valid:
+            total_forms = request.POST.get('items-TOTAL_FORMS', '?')
+            initial_forms = request.POST.get('items-INITIAL_FORMS', '?')
+            logger.warning(
+                f"[order_create] formset inválido — "
+                f"TOTAL_FORMS={total_forms} INITIAL_FORMS={initial_forms} | "
+                f"errors_por_form={formset.errors} | "
+                f"non_form_errors={formset.non_form_errors()}"
+            )
 
-        if form.is_valid():
-            if formset.is_valid():
+        if form_valid:
+            if formset_valid:
                 active_forms = [
                     f for f in formset.forms
                     if f.cleaned_data and not f.cleaned_data.get('DELETE', False)
@@ -383,7 +382,19 @@ def order_create(request, exchange_rate=None):
                     messages.error(request, f'Error al crear la orden: {str(e)}')
 
             else:
-                messages.error(request, 'Error en los productos. Revise los datos de los productos.')
+                # Construir mensaje de error específico para que la usuaria sepa cuál producto falló
+                error_parts = []
+                for i, form_errors in enumerate(formset.errors):
+                    if form_errors:
+                        product_name = request.POST.get(f'items-{i}-new_product_name') or f'producto #{i+1}'
+                        error_parts.append(f"{product_name}: {'; '.join(str(v) for vlist in form_errors.values() for v in vlist)}")
+                non_form = formset.non_form_errors()
+                if non_form:
+                    error_parts.extend([str(e) for e in non_form])
+                if error_parts:
+                    messages.error(request, f'Error en los productos — {" | ".join(error_parts)}')
+                else:
+                    messages.error(request, 'Error en los productos. Revise los datos ingresados.')
         else:
             messages.error(request, 'Error en los datos de la orden. Revise el proveedor y otros campos.')
     else:

@@ -181,6 +181,11 @@ LOGGING = {
             'level': 'INFO',
             'propagate': True,
         },
+        'suppliers': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
         'django': {
             'handlers': ['console'],
             'level': 'WARNING',
