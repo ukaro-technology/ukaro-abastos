@@ -22,4 +22,5 @@
 - [x] 2 bugs resueltos ✅ (2026-04-16)
 
 ## Última sesión
-2026-06-05: Fix bug órdenes de compra + reconciliación git servidor + health endpoint + limpieza ramas.
+2026-06-07: [snapshot automático — 1 commit(s)]
+- f19ae36 Fix: logging detallado de errores de formset + mensaje específico al usuario
