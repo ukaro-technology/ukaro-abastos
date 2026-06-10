@@ -794,6 +794,11 @@
                 return String(value).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
             };
 
+            // Round numeric values to avoid JS float precision issues (e.g. 1.3000000000000003).
+            // Django DecimalField(decimal_places=2) rejects more than 2 decimal places.
+            const r2 = (v) => (v === '' || v === null || v === undefined) ? '' : parseFloat(parseFloat(v).toFixed(2));
+            const r3 = (v) => (v === '' || v === null || v === undefined) ? '' : parseFloat(parseFloat(v).toFixed(3));
+
             // Generates the hidden input fields that Django's formset processor needs.
             // Called at submit time (authoritative) and reactively (convenience).
             function generateFormsetFields(products) {
@@ -831,9 +836,9 @@
                         <input type="hidden" name="items-${formIndex}-id" value="${sanitize(product.itemId)}">
                         <input type="hidden" name="items-${formIndex}-DELETE" value="">
                         <input type="hidden" name="items-${formIndex}-product" value="${sanitize(product.productId || '')}">
-                        <input type="hidden" name="items-${formIndex}-quantity" value="${sanitize(product.quantity || 1)}">
-                        <input type="hidden" name="items-${formIndex}-price_usd" value="${sanitize(product.purchasePrice || 0)}">
-                        <input type="hidden" name="items-${formIndex}-selling_price_usd" value="${sanitize(product.sellingPrice || '')}">
+                        <input type="hidden" name="items-${formIndex}-quantity" value="${sanitize(r2(product.quantity) || 1)}">
+                        <input type="hidden" name="items-${formIndex}-price_usd" value="${sanitize(r2(product.purchasePrice) || 0)}">
+                        <input type="hidden" name="items-${formIndex}-selling_price_usd" value="${sanitize(r2(product.sellingPrice))}">
                         <input type="hidden" name="items-${formIndex}-is_new_product" value="">
                     `;
                     formsetContainer.appendChild(el);
@@ -848,17 +853,17 @@
                         <input type="hidden" name="items-${formIndex}-id" value="">
                         <input type="hidden" name="items-${formIndex}-DELETE" value="">
                         <input type="hidden" name="items-${formIndex}-product" value="${sanitize(product.productId || '')}">
-                        <input type="hidden" name="items-${formIndex}-quantity" value="${sanitize(product.quantity || 1)}">
-                        <input type="hidden" name="items-${formIndex}-price_usd" value="${sanitize(product.purchasePrice || 0)}">
-                        <input type="hidden" name="items-${formIndex}-selling_price_usd" value="${sanitize(product.sellingPrice || '')}">
+                        <input type="hidden" name="items-${formIndex}-quantity" value="${sanitize(r2(product.quantity) || 1)}">
+                        <input type="hidden" name="items-${formIndex}-price_usd" value="${sanitize(r2(product.purchasePrice) || 0)}">
+                        <input type="hidden" name="items-${formIndex}-selling_price_usd" value="${sanitize(r2(product.sellingPrice))}">
                         <input type="hidden" name="items-${formIndex}-is_new_product" value="${product.isNew ? 'on' : ''}">
                         ${product.isNew ? `
                             <input type="hidden" name="items-${formIndex}-new_product_name" value="${sanitize(product.name || '')}">
                             <input type="hidden" name="items-${formIndex}-new_product_barcode" value="${sanitize(product.barcode || '')}">
                             <input type="hidden" name="items-${formIndex}-new_product_category" value="${sanitize(product.category || '')}">
                             <input type="hidden" name="items-${formIndex}-new_product_unit_type" value="${sanitize(product.unitType || 'unit')}">
-                            <input type="hidden" name="items-${formIndex}-new_product_selling_price_usd" value="${sanitize(product.sellingPrice || 0)}">
-                            <input type="hidden" name="items-${formIndex}-new_product_min_stock" value="${sanitize(product.minStock || 5)}">
+                            <input type="hidden" name="items-${formIndex}-new_product_selling_price_usd" value="${sanitize(r2(product.sellingPrice) || 0)}">
+                            <input type="hidden" name="items-${formIndex}-new_product_min_stock" value="${sanitize(r3(product.minStock) || 5)}">
                             <input type="hidden" name="items-${formIndex}-new_product_description" value="${sanitize(product.description || '')}">
                         ` : ''}
                     `;
