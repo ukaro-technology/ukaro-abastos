@@ -526,3 +526,190 @@ class SupplierPaymentViewsTest(TestCase):
         response = self.client.get(url)
         # Debe redirigir porque ya está pagada
         self.assertEqual(response.status_code, 302)
+
+
+# ─────────────────────────────────────────────
+# ORDER CREATE API (JSON endpoint)
+# ─────────────────────────────────────────────
+
+class OrderCreateApiTest(TestCase):
+    """Tests para el endpoint JSON /suppliers/orders/api/create/"""
+
+    def setUp(self):
+        self.client = Client()
+        self.admin = User.objects.create_user(
+            username='api_admin', password='pass123', is_admin=True
+        )
+        self.cat = make_category('API Cat')
+        self.supplier = make_supplier('API Proveedor')
+        self.product = make_product(self.cat, barcode='APIBARCODE001', name='Producto API')
+        make_exchange_rate(self.admin, '50.00')
+        self.url = reverse('suppliers:order_create_api')
+
+    def _post(self, payload):
+        return self.client.post(
+            self.url,
+            data=json.dumps(payload),
+            content_type='application/json',
+        )
+
+    def test_requires_login(self):
+        resp = self._post({})
+        self.assertEqual(resp.status_code, 302)
+
+    def test_rejects_get(self):
+        self.client.login(username='api_admin', password='pass123')
+        resp = self.client.get(self.url)
+        self.assertEqual(resp.status_code, 405)
+        self.assertFalse(resp.json()['success'])
+
+    def test_rejects_empty_items(self):
+        self.client.login(username='api_admin', password='pass123')
+        resp = self._post({'supplier_id': self.supplier.pk, 'items': []})
+        self.assertEqual(resp.status_code, 400)
+        data = resp.json()
+        self.assertFalse(data['success'])
+        messages = [e['message'] for e in data.get('errors', [])]
+        self.assertTrue(any('producto' in m.lower() for m in messages))
+
+    def test_rejects_missing_supplier(self):
+        self.client.login(username='api_admin', password='pass123')
+        resp = self._post({
+            'items': [{'product_id': self.product.pk, 'quantity': 2, 'price_usd': '10.00'}]
+        })
+        self.assertEqual(resp.status_code, 400)
+        data = resp.json()
+        self.assertFalse(data['success'])
+
+    def test_rejects_invalid_quantity(self):
+        self.client.login(username='api_admin', password='pass123')
+        resp = self._post({
+            'supplier_id': self.supplier.pk,
+            'items': [{'product_id': self.product.pk, 'is_new': False, 'quantity': 0, 'price_usd': '10.00'}],
+        })
+        self.assertEqual(resp.status_code, 400)
+        data = resp.json()
+        self.assertFalse(data['success'])
+        self.assertTrue(any('cantidad' in e for errs in [i['errors'] for i in data.get('item_errors', [])] for e in errs))
+
+    def test_rejects_invalid_price(self):
+        self.client.login(username='api_admin', password='pass123')
+        resp = self._post({
+            'supplier_id': self.supplier.pk,
+            'items': [{'product_id': self.product.pk, 'is_new': False, 'quantity': 1, 'price_usd': 0}],
+        })
+        self.assertEqual(resp.status_code, 400)
+        self.assertFalse(resp.json()['success'])
+
+    def test_creates_order_with_existing_product(self):
+        self.client.login(username='api_admin', password='pass123')
+        resp = self._post({
+            'supplier_id': self.supplier.pk,
+            'status': 'pending',
+            'items': [{
+                'product_id': self.product.pk,
+                'is_new': False,
+                'quantity': '3.00',
+                'price_usd': '12.50',
+                'selling_price_usd': '18.00',
+            }],
+        })
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(data['success'])
+        self.assertIn('order_id', data)
+        order = SupplierOrder.objects.get(pk=data['order_id'])
+        self.assertEqual(order.items.count(), 1)
+        item = order.items.first()
+        self.assertEqual(item.quantity, Decimal('3.00'))
+        self.assertEqual(item.price_usd, Decimal('12.50'))
+
+    def test_creates_order_decimal_precision_safe(self):
+        """JS float 1.3000000000000003 debe manejarse sin ValidationError"""
+        self.client.login(username='api_admin', password='pass123')
+        resp = self._post({
+            'supplier_id': self.supplier.pk,
+            'items': [{
+                'product_id': self.product.pk,
+                'is_new': False,
+                'quantity': 1.3000000000000003,
+                'price_usd': '10.50',
+            }],
+        })
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(data['success'])
+        item = SupplierOrder.objects.get(pk=data['order_id']).items.first()
+        self.assertEqual(item.quantity, Decimal('1.30'))
+
+    def test_creates_new_product_and_order(self):
+        self.client.login(username='api_admin', password='pass123')
+        resp = self._post({
+            'supplier_id': self.supplier.pk,
+            'items': [{
+                'is_new': True,
+                'name': 'Producto Nuevo Test',
+                'barcode': 'NEWBARCODE999',
+                'category_id': self.cat.pk,
+                'unit_type': 'unit',
+                'quantity': '5.00',
+                'price_usd': '8.00',
+                'selling_price_usd': '12.00',
+                'min_stock': '3',
+            }],
+        })
+        self.assertEqual(resp.status_code, 200, resp.json())
+        data = resp.json()
+        self.assertTrue(data['success'])
+        self.assertTrue(Product.objects.filter(barcode='NEWBARCODE999').exists())
+
+    def test_rejects_duplicate_barcode_for_new_product(self):
+        self.client.login(username='api_admin', password='pass123')
+        resp = self._post({
+            'supplier_id': self.supplier.pk,
+            'items': [{
+                'is_new': True,
+                'name': 'Producto Duplicado',
+                'barcode': 'APIBARCODE001',  # ya existe
+                'category_id': self.cat.pk,
+                'quantity': '1.00',
+                'price_usd': '5.00',
+                'selling_price_usd': '8.00',
+            }],
+        })
+        self.assertEqual(resp.status_code, 400)
+        self.assertFalse(resp.json()['success'])
+
+    def test_received_order_updates_stock(self):
+        initial_stock = self.product.stock
+        self.client.login(username='api_admin', password='pass123')
+        resp = self._post({
+            'supplier_id': self.supplier.pk,
+            'status': 'received',
+            'items': [{
+                'product_id': self.product.pk,
+                'is_new': False,
+                'quantity': '10.00',
+                'price_usd': '12.00',
+            }],
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.json()['success'])
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.stock, initial_stock + Decimal('10.00'))
+
+    def test_atomic_rollback_on_error(self):
+        """Si falla un ítem a mitad de la transacción, nada se guarda"""
+        order_count_before = SupplierOrder.objects.count()
+        # Mandar un product_id que no existe para forzar error en la segunda iteración
+        self.client.login(username='api_admin', password='pass123')
+        resp = self._post({
+            'supplier_id': self.supplier.pk,
+            'items': [
+                {'product_id': 99999, 'is_new': False, 'quantity': '1', 'price_usd': '5'},
+            ],
+        })
+        # La validación previa debe rechazar el producto inexistente
+        self.assertEqual(resp.status_code, 400)
+        self.assertFalse(resp.json()['success'])
+        self.assertEqual(SupplierOrder.objects.count(), order_count_before)

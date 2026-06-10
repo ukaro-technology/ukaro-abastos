@@ -26,4 +26,5 @@ urlpatterns = [
 
     # API endpoints
     path('api/product-lookup/<str:barcode>/', views.product_lookup_api, name='product_lookup_api'),
+    path('orders/api/create/', views.order_create_api, name='order_create_api'),
 ]

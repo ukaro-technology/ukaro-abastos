@@ -1,8 +1,9 @@
 # suppliers/views.py
 
 # Python standard library
+import json as json_module
 import logging
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 # Django core
 from django.shortcuts import render, redirect, get_object_or_404
@@ -697,6 +698,198 @@ def _process_received_order(order, user, update_prices=True, notes=''):
         'total_items_received': total_items_received,
         'products_count': len(updated_products)
     }
+
+@login_required
+@require_exchange_rate(redirect_url='suppliers:order_list')
+def order_create_api(request, exchange_rate=None):
+    """
+    Endpoint JSON para crear órdenes de compra.
+    Reemplaza al flujo de Django formsets — acepta datos estructurados,
+    valida con precisión y nunca pierde el trabajo del usuario.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Método no permitido'}, status=405)
+
+    try:
+        data = json_module.loads(request.body)
+    except (json_module.JSONDecodeError, ValueError):
+        return JsonResponse({'success': False, 'error': 'Datos inválidos'}, status=400)
+
+    errors = []
+
+    # ── Validar cabecera de la orden ─────────────────────────────────────────
+    supplier_id = data.get('supplier_id')
+    supplier = None
+    if not supplier_id:
+        errors.append({'field': 'supplier', 'message': 'Proveedor requerido'})
+    else:
+        try:
+            supplier = Supplier.objects.get(pk=supplier_id, is_active=True)
+        except Supplier.DoesNotExist:
+            errors.append({'field': 'supplier', 'message': 'Proveedor no encontrado o inactivo'})
+
+    status_value = data.get('status', 'pending')
+    valid_statuses = [s[0] for s in SupplierOrder.ORDER_STATUS]
+    if status_value not in valid_statuses:
+        errors.append({'field': 'status', 'message': f'Estado inválido: {status_value}'})
+
+    raw_items = data.get('items', [])
+    if not raw_items:
+        errors.append({'field': 'items', 'message': 'Debe agregar al menos un producto a la orden'})
+
+    if errors:
+        return JsonResponse({'success': False, 'errors': errors}, status=400)
+
+    # ── Validar items ────────────────────────────────────────────────────────
+    item_errors = []
+    validated_items = []
+
+    for i, item in enumerate(raw_items):
+        label = item.get('name') or f'producto #{i + 1}'
+        errs = []
+
+        # Cantidad
+        try:
+            qty = Decimal(str(item.get('quantity', 0))).quantize(Decimal('0.01'))
+            if qty <= 0:
+                errs.append('la cantidad debe ser mayor a cero')
+            elif qty > Decimal('100000'):
+                errs.append('la cantidad no puede exceder 100,000')
+        except (InvalidOperation, ValueError, TypeError):
+            errs.append('cantidad inválida')
+            qty = Decimal('1')
+
+        # Precio de compra
+        try:
+            price = Decimal(str(item.get('price_usd', 0))).quantize(Decimal('0.01'))
+            if price <= 0:
+                errs.append('el precio de compra debe ser mayor a cero')
+        except (InvalidOperation, ValueError, TypeError):
+            errs.append('precio de compra inválido')
+            price = Decimal('0')
+
+        # Precio de venta (opcional para existentes, requerido para nuevos)
+        selling_price = None
+        raw_sp = item.get('selling_price_usd')
+        if raw_sp not in (None, '', 0, '0', '0.0'):
+            try:
+                selling_price = Decimal(str(raw_sp)).quantize(Decimal('0.01'))
+                if selling_price <= 0:
+                    selling_price = None
+            except (InvalidOperation, ValueError, TypeError):
+                selling_price = None
+
+        is_new = item.get('is_new', False)
+
+        if is_new:
+            if not str(item.get('name', '')).strip():
+                errs.append('nombre del producto requerido')
+            barcode = str(item.get('barcode', '')).strip()
+            if not barcode:
+                errs.append('código de barras requerido')
+            elif Product.objects.filter(barcode=barcode).exists():
+                errs.append(f'el código "{barcode}" ya está registrado en inventario')
+            if not item.get('category_id'):
+                errs.append('categoría requerida')
+            if not selling_price or selling_price <= 0:
+                errs.append('precio de venta requerido para producto nuevo')
+        else:
+            pid = item.get('product_id')
+            if not pid:
+                errs.append('debe seleccionar un producto existente')
+            else:
+                try:
+                    Product.objects.get(pk=pid, is_active=True)
+                except Product.DoesNotExist:
+                    errs.append(f'el producto seleccionado no existe o fue desactivado')
+
+        if errs:
+            item_errors.append({'item': i + 1, 'name': label, 'errors': errs})
+        else:
+            validated_items.append({**item, '_qty': qty, '_price': price, '_selling': selling_price})
+
+    if item_errors:
+        return JsonResponse({'success': False, 'item_errors': item_errors}, status=400)
+
+    # ── Guardar en base de datos ─────────────────────────────────────────────
+    try:
+        with transaction.atomic():
+            order = SupplierOrder(
+                supplier=supplier,
+                status=status_value,
+                notes=data.get('notes', ''),
+                paid=bool(data.get('paid', False)),
+                created_by=request.user,
+            )
+            order.save()
+
+            for item in validated_items:
+                if item.get('is_new'):
+                    from inventory.services import ProductService
+                    try:
+                        min_stock = Decimal(str(item.get('min_stock', 5))).quantize(Decimal('0.001'))
+                    except (InvalidOperation, ValueError, TypeError):
+                        min_stock = Decimal('5.000')
+                    cat = Category.objects.get(pk=item['category_id'])
+                    product = ProductService.create_product(
+                        name=str(item['name']).strip(),
+                        barcode=str(item['barcode']).strip(),
+                        category=cat,
+                        purchase_price_usd=item['_price'],
+                        selling_price_usd=item['_selling'] or item['_price'],
+                        unit_type=item.get('unit_type', 'unit'),
+                        description=item.get('description', ''),
+                        stock=Decimal('0'),
+                        min_stock=min_stock,
+                        is_active=True,
+                        exchange_rate=exchange_rate,
+                        created_by=request.user,
+                    )
+                else:
+                    product = Product.objects.get(pk=item['product_id'])
+
+                SupplierOrderItem.objects.create(
+                    order=order,
+                    product=product,
+                    quantity=item['_qty'],
+                    price_usd=item['_price'],
+                    selling_price_usd=item['_selling'],
+                )
+
+            order.update_totals()
+
+            if order.status == 'received':
+                _process_received_order(
+                    order=order,
+                    user=request.user,
+                    update_prices=True,
+                    notes='Orden creada directamente como recibida',
+                )
+
+            logger.info(
+                f"[order_create_api] Orden #{order.id} — "
+                f"{len(validated_items)} items — user={request.user.id}"
+            )
+
+            return JsonResponse({
+                'success': True,
+                'order_id': order.id,
+                'redirect': f'/suppliers/orders/{order.id}/',
+            })
+
+    except IntegrityError as e:
+        logger.error(f"[order_create_api] IntegrityError: {e}", exc_info=True)
+        return JsonResponse({
+            'success': False,
+            'error': 'Un código de barras ya está registrado. Verifique los productos nuevos.',
+        }, status=400)
+    except Exception as e:
+        logger.error(f"[order_create_api] Error inesperado: {e}", exc_info=True)
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al guardar la orden: {str(e)}',
+        }, status=500)
+
 
 def _create_product_from_form(form, exchange_rate, created_by=None):
     """

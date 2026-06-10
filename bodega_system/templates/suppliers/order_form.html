@@ -255,6 +255,40 @@
         border: 1px solid #fca5a5;
     }
 
+    .po-notification.info {
+        background: #eff6ff;
+        color: #1d4ed8;
+        border: 1px solid #93c5fd;
+    }
+
+    .po-submit-errors {
+        background: #fef2f2;
+        border: 1px solid #fca5a5;
+        border-radius: 8px;
+        padding: 14px 16px;
+        margin-bottom: 12px;
+    }
+    .po-submit-errors h5 {
+        font-size: 13px;
+        font-weight: 700;
+        color: #dc2626;
+        margin: 0 0 8px 0;
+    }
+    .po-submit-errors ul {
+        margin: 0;
+        padding-left: 18px;
+    }
+    .po-submit-errors li {
+        font-size: 13px;
+        color: #b91c1c;
+        margin-bottom: 4px;
+    }
+
+    @keyframes spin {
+        from { transform: rotate(0deg); }
+        to   { transform: rotate(360deg); }
+    }
+
     /* Loading and buttons */
     .po-spinner {
         width: 14px;
@@ -469,6 +503,8 @@
     <form method="post"
           action="{% if form.instance.pk %}{% url 'suppliers:order_update' form.instance.pk %}{% else %}{% url 'suppliers:order_create' %}{% endif %}"
           x-data="orderForm()" x-init="init()"
+          @submit.prevent="submitOrder()"
+          x-effect="saveDraft()"
           @keydown.enter="$event.target.tagName !== 'TEXTAREA' && $event.preventDefault()">
         {% csrf_token %}
         
@@ -872,39 +908,7 @@
                 });
             }
 
-            // CRITICAL: register submit handler FIRST — this is the authoritative bridge
-            // between Alpine state and Django's formset processor.
-            // Must run before any code that could throw, so it is always registered.
-            const form = document.querySelector('form');
-            if (form) {
-                form.addEventListener('submit', (e) => {
-                    const invalidProducts = app.products.filter((product) => {
-                        if (!product.quantity || product.quantity <= 0) return true;
-                        if (!product.purchasePrice || product.purchasePrice <= 0) return true;
-                        if (product.isNew) {
-                            if (!product.name || !product.barcode || !product.category) return true;
-                            if (!product.sellingPrice || product.sellingPrice <= 0) return true;
-                        }
-                        return false;
-                    });
-
-                    if (invalidProducts.length > 0) {
-                        e.preventDefault();
-                        const labels = invalidProducts.map((p) =>
-                            p.name ? `"${p.name}"` : `(código: ${p.barcode || 'sin código'})`
-                        );
-                        alert(`Datos incompletos en: ${labels.join(', ')}.\n\nVerifique cantidad, precio de compra y campos requeridos.`);
-                        return;
-                    }
-
-                    // Regenerate fields with the final product state before Django receives them
-                    generateFormsetFields(app.products);
-                });
-            }
-
-            // Keep formset fields in sync as the user adds/removes products.
-            // Alpine.$data() returns the reactive proxy so Alpine.effect tracks changes.
-            // This is the correct external API — app.$watch does NOT exist on $data().
+            // Keep formset fields in sync (fallback only — submit is handled via JSON endpoint).
             Alpine.effect(() => generateFormsetFields(app.products));
         });
         </script>
@@ -933,22 +937,55 @@
                         </div>
                     </div>
                     
-                    <div style="display: flex; gap: 12px;">
-                        <a href="{% url 'suppliers:order_list' %}" class="po-btn secondary">
-                            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                            </svg>
-                            Cancelar
-                        </a>
-                        <button 
-                            type="submit"
-                            :disabled="products.length === 0 || !validateProducts()"
-                            class="po-btn primary" style="padding: 12px 24px;">
-                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                            </svg>
-                            {% if form.instance.pk %}Actualizar Orden de Compra{% else %}Crear Orden de Compra{% endif %}
-                        </button>
+                    <div style="display: flex; flex-direction: column; gap: 10px; align-items: flex-end;">
+
+                        <!-- Panel de errores de envío -->
+                        <div x-show="submitErrors.length > 0 || submitError"
+                             class="po-submit-errors" style="display:none; width: 100%;">
+                            <h5>
+                                <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="display:inline; vertical-align: middle; margin-right: 4px;">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+                                </svg>
+                                Corrija los siguientes errores antes de guardar:
+                            </h5>
+                            <ul>
+                                <template x-for="(err, i) in submitErrors" :key="i">
+                                    <li x-text="err"></li>
+                                </template>
+                                <li x-show="submitError" x-text="submitError"></li>
+                            </ul>
+                        </div>
+
+                        <div style="display: flex; gap: 12px;">
+                            <a href="{% url 'suppliers:order_list' %}" class="po-btn secondary"
+                               :style="submitting ? 'pointer-events:none; opacity:0.5' : ''">
+                                <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                </svg>
+                                Cancelar
+                            </a>
+                            <button
+                                type="submit"
+                                :disabled="submitting || products.length === 0"
+                                class="po-btn primary" style="padding: 12px 24px; min-width: 200px;">
+                                <template x-if="!submitting">
+                                    <span style="display:flex; align-items:center; gap:6px;">
+                                        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                        </svg>
+                                        {% if form.instance.pk %}Actualizar Orden de Compra{% else %}Crear Orden de Compra{% endif %}
+                                    </span>
+                                </template>
+                                <template x-if="submitting">
+                                    <span style="display:flex; align-items:center; gap:8px;">
+                                        <svg style="animation: spin 1s linear infinite;" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                                        </svg>
+                                        Guardando...
+                                    </span>
+                                </template>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1123,6 +1160,10 @@ document.addEventListener('alpine:init', () => {
         scanning: false,
         notFoundCode: '',
         statusMessage: { type: '', text: '' },
+        submitting: false,
+        submitError: '',
+        submitErrors: [],
+        _draftKey: 'abastos_order_draft_new',
         exchangeRate: 7.0,
         showNewProductModal: false,
         newProductForm: {
@@ -1373,6 +1414,138 @@ document.addEventListener('alpine:init', () => {
             });
         },
         
+        // ── Persistencia de borrador ────────────────────────────────────────
+        saveDraft() {
+            {% if not form.instance.pk %}
+            try {
+                localStorage.setItem(this._draftKey, JSON.stringify(this.products));
+            } catch (_) {}
+            {% endif %}
+        },
+
+        restoreDraft() {
+            try {
+                const saved = localStorage.getItem(this._draftKey);
+                if (saved) {
+                    const draft = JSON.parse(saved);
+                    if (Array.isArray(draft) && draft.length > 0) return draft;
+                }
+            } catch (_) {}
+            return null;
+        },
+
+        _clearDraft() {
+            try { localStorage.removeItem(this._draftKey); } catch (_) {}
+        },
+
+        // ── Envío JSON al endpoint robusto ──────────────────────────────────
+        _validateForSubmit() {
+            const errors = [];
+            if (this.products.length === 0) {
+                errors.push('Debe agregar al menos un producto a la orden.');
+                return errors;
+            }
+            this.products.forEach((p, i) => {
+                const label = p.name ? `"${p.name}"` : `producto #${i + 1}`;
+                const errs = [];
+                if (!p.quantity || p.quantity <= 0) errs.push('cantidad inválida');
+                if (!p.purchasePrice || p.purchasePrice <= 0) errs.push('precio de compra requerido');
+                if (p.isNew) {
+                    if (!p.name) errs.push('nombre requerido');
+                    if (!p.barcode) errs.push('código de barras requerido');
+                    if (!p.category) errs.push('categoría requerida');
+                    if (!p.sellingPrice || p.sellingPrice <= 0) errs.push('precio de venta requerido');
+                }
+                if (errs.length > 0) errors.push(`${label}: ${errs.join(', ')}`);
+            });
+            return errors;
+        },
+
+        async submitOrder() {
+            if (this.submitting) return;
+
+            const clientErrors = this._validateForSubmit();
+            if (clientErrors.length > 0) {
+                this.submitErrors = clientErrors;
+                this.submitError = '';
+                this.$nextTick(() => {
+                    document.querySelector('.po-submit-errors')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                });
+                return;
+            }
+
+            this.submitting = true;
+            this.submitError = '';
+            this.submitErrors = [];
+
+            const csrf = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+            const supplierEl = document.getElementById('id_supplier');
+            const statusEl = document.getElementById('id_status');
+            const notesEl = document.getElementById('id_notes');
+            const paidEl = document.getElementById('id_paid');
+
+            const r2 = v => (v == null || v === '') ? null : parseFloat(parseFloat(v).toFixed(2));
+            const r3 = v => (v == null || v === '') ? null : parseFloat(parseFloat(v).toFixed(3));
+
+            const payload = {
+                supplier_id: supplierEl?.value || null,
+                status: statusEl?.value || 'pending',
+                notes: notesEl?.value || '',
+                paid: paidEl ? paidEl.checked : false,
+                items: this.products.map(p => ({
+                    product_id: p.productId || null,
+                    is_new: p.isNew || false,
+                    quantity: r2(p.quantity) ?? 1,
+                    price_usd: r2(p.purchasePrice) ?? 0,
+                    selling_price_usd: r2(p.sellingPrice),
+                    name: p.name || '',
+                    barcode: p.barcode || '',
+                    category_id: p.category || null,
+                    unit_type: p.unitType || 'unit',
+                    min_stock: r3(p.minStock ?? 5) ?? 5,
+                    description: p.description || '',
+                })),
+            };
+
+            try {
+                const response = await fetch('/suppliers/orders/api/create/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrf,
+                    },
+                    body: JSON.stringify(payload),
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    this._clearDraft();
+                    window.location.href = data.redirect;
+                    return;
+                }
+
+                if (data.item_errors) {
+                    this.submitErrors = data.item_errors.map(e =>
+                        `Producto ${e.item} (${e.name}): ${e.errors.join(', ')}`
+                    );
+                } else if (data.errors) {
+                    this.submitErrors = data.errors.map(e => e.message || String(e));
+                } else {
+                    this.submitError = data.error || 'Error al guardar la orden. Sus datos no se perdieron.';
+                }
+
+                this.$nextTick(() => {
+                    document.querySelector('.po-submit-errors')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                });
+
+            } catch (_) {
+                this.submitError = 'Error de conexión. Sus datos están guardados como borrador. Intente de nuevo.';
+            } finally {
+                this.submitting = false;
+            }
+        },
+
         showStatus(type, text) {
             this.statusMessage = { type, text };
             setTimeout(() => {
@@ -1410,6 +1583,15 @@ document.addEventListener('alpine:init', () => {
                     description: item.description,
                 });
             });
+            {% endif %}
+
+            {% if not form.instance.pk %}
+            // Restaurar borrador si el usuario tenía trabajo no guardado
+            const draft = this.restoreDraft();
+            if (draft && draft.length > 0 && this.products.length === 0) {
+                this.products = draft;
+                this.showStatus('info', `Borrador restaurado: ${draft.length} producto(s). Sus datos no se perdieron.`);
+            }
             {% endif %}
 
             this.focusBarcodeInput();
