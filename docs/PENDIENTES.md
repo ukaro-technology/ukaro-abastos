@@ -22,5 +22,5 @@
 - [x] 2 bugs resueltos ✅ (2026-04-16)
 
 ## Última sesión
-2026-06-07: [snapshot automático — 1 commit(s)]
-- f19ae36 Fix: logging detallado de errores de formset + mensaje específico al usuario
+2026-06-10: [snapshot automático — 1 commit(s)]
+- 09ed439 Fix: redondear valores numéricos en formset antes de enviar a Django
