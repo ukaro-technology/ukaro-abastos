@@ -14,6 +14,10 @@
 #
 # Genera export_ventas_10_11_julio.json en el directorio actual.
 # Es de SOLO LECTURA — no modifica nada en PythonAnywhere.
+#
+# NOTA: esta instancia es anterior a la migración del 5-abr-2026 que agregó
+# el campo `cedula` a Customer, así que no existe aquí. Se usa getattr() por
+# si acaso, y se exporta teléfono como identificador secundario.
 
 import json
 from datetime import date
@@ -66,8 +70,9 @@ for sale in ventas:
         {
             "pa_sale_id": sale.id,
             "date": sale.date.isoformat(),
-            "customer_cedula": sale.customer.cedula if sale.customer else None,
+            "customer_cedula": getattr(sale.customer, "cedula", None) if sale.customer else None,
             "customer_name": sale.customer.name if sale.customer else None,
+            "customer_phone": sale.customer.phone if sale.customer else None,
             "cashier_username": sale.user.username if sale.user else None,
             "total_bs": dec(sale.total_bs),
             "total_usd": dec(sale.total_usd),

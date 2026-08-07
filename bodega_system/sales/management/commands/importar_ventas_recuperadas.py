@@ -107,8 +107,9 @@ class Command(BaseCommand):
                         )
                 elif v.get("customer_name"):
                     avisos.append(
-                        f"venta original con cliente '{v['customer_name']}' sin cédula registrada "
-                        "-> no se puede emparejar con certeza, se importa sin cliente"
+                        f"venta original con cliente '{v['customer_name']}' (tel: {v.get('customer_phone') or 's/d'}) "
+                        "sin cédula registrada -> no se puede emparejar con certeza, se importa sin cliente. "
+                        "Si corresponde, asocia el cliente a mano después en Django admin."
                     )
 
                 if v["is_credit"] and not customer:
