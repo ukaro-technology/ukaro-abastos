@@ -3,7 +3,7 @@
 **Proyecto:** ukaro-abastos
 **Fecha:** 2026-08-08
 **Autor:** Claude Code (supervisado por Simón)
-**Estado:** borrador
+**Estado:** aprobado
 
 ## 1. Outcome (Resultado esperado)
 
@@ -45,10 +45,10 @@ compras recibidas) para poder explicar el número ante una auditoría.
   and feel que el resto de reportes del sistema.
 
 ### Excluido (por ahora, explícitamente fuera de esta spec)
-- **Auto-ajustar el stock del sistema al valor físico contado.** El reporte de discrepancias es solo
-  informativo en esta primera versión — no crea `InventoryAdjustment` automáticamente. (Ver pregunta
-  abierta #1 abajo — si Simón lo quiere, es un paso más, no gran esfuerzo, pero cambia el nivel de
-  riesgo de la feature y prefiero que sea una decisión explícita, no un default.)
+- **Auto-ajustar el stock del sistema al valor físico contado** — decidido con Simón (2026-08-08):
+  el reporte de discrepancias queda **solo informativo**. Cualquier corrección de stock se hace a mano
+  desde la pantalla de ajustes que ya existe (`adjustment_list`/`adjustment_create`). Si en el futuro
+  se quiere automatizar, es una spec aparte.
 - Conteo físico de combos (`ProductCombo`) — el sistema no tiene combos cargados actualmente (0 en
   producción), no hay nada que auditar ahí todavía.
 - Cualquier tipo de conteo cíclico automático/programado, notificaciones, o app móvil para contar con
@@ -76,27 +76,19 @@ compras recibidas) para poder explicar el número ante una auditoría.
 
 - Persistir el conteo como modelo (no un formulario de un solo uso) — Simón dijo explícitamente que
   quiere "guardarlos para su posterior revisión".
-- `admin_required`, no `sales_access_required` — es herramienta de auditoría interna, no de venta.
+- `admin_required`, no `sales_access_required`, en TODAS las vistas nuevas (crear conteo, ver
+  discrepancias, listado, trazabilidad) — decidido con Simón (2026-08-08), mismo criterio que
+  `adjustment_list`. No hay registro de conteo por no-admins en esta versión.
+- Reporte de discrepancias **solo informativo**, sin auto-ajuste de stock (ver Scope §2).
 - Reusar `generate_pdf_response` en vez de un generador de PDF nuevo desde cero.
 - Combos quedan fuera del alcance (no hay datos que auditar).
 - `system_stock` se guarda como snapshot en `InventoryCountItem` al momento del conteo, no se
   recalcula después — así el PDF de una auditoría vieja no cambia si el stock del sistema se sigue
   moviendo.
+- Trazabilidad: rango de fechas por default 30 días, con selector para ampliarlo (ej. "todo julio"
+  para casos como la recuperación de ventas de la caída de DO) — no bloqueante, es un default de UI.
 
-## 5. Preguntas abiertas — necesito tu respuesta antes de implementar
-
-1. **¿El reporte de discrepancias debe poder generar los `InventoryAdjustment` automáticamente** para
-   dejar el stock del sistema igual al conteo físico (con un botón explícito tipo "aplicar
-   correcciones", no automático al guardar), **o preferís que quede solo informativo** y que cualquier
-   corrección la hagan a mano desde la pantalla de ajustes que ya existe?
-2. **¿Quién puede iniciar/completar un conteo?** ¿Cualquier admin, o específicamente Leida? (Ahora
-   mismo Dueño/Veterinario/Encargado no aplica a este proyecto — ukaro-abastos no tiene roles
-   diferenciados más allá de `is_admin`, así que la pregunta real es: ¿algún empleado no-admin debería
-   poder REGISTRAR un conteo físico aunque no pueda ver el reporte de discrepancias completo?)
-3. **Trazabilidad: ¿30 días por default está bien,** o normalmente vas a querer rangos más largos
-   (ej. "todo julio" para casos como el de la caída de DO)?
-
-## 6. Tasks (Implementación) — pendiente de aprobación, no arrancar todavía
+## 5. Tasks (Implementación)
 
 1. [ ] Modelos `InventoryCount` + `InventoryCountItem` (app `inventory`) + migración
 2. [ ] Vista `inventory_count_create` (elegir categoría, tabla de conteo, guardar)
@@ -115,7 +107,7 @@ compras recibidas) para poder explicar el número ante una auditoría.
 11. [ ] Verificación manual con datos reales de producción (no solo sintéticos) antes de dar por
     terminado — capturar pantallas, mismo criterio que el resto del proyecto
 
-## 7. Verification (Cómo verificar)
+## 6. Verification (Cómo verificar)
 
 - [ ] `pytest` en verde, incluyendo los tests nuevos del punto 10
 - [ ] Verificación manual: hacer un conteo real de una categoría chica en producción, confirmar que
