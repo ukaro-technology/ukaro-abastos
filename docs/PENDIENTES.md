@@ -51,8 +51,11 @@
 ## Próximos pasos
 - [ ] **Revisar `/root/ram_monitor/ram.log` del droplet NUEVO (157.245.211.83) en 24-48h** con tráfico real
       de un día completo de ventas — confirmar que 1GB aguanta cómodo antes de destruir el droplet viejo.
-- [ ] **Destruir droplet viejo (`562942552`, 161.35.142.183) una vez confirmada la estabilidad** (unos días de
-      margen, no antes) — factura de DO debería reflejar ~$6/mes después.
+- [ ] **Destruir droplet viejo (`562942552`, 161.35.142.183) una vez confirmada la estabilidad** — decisión
+      2026-08-08: esperar 1 día completo de ventas reales, no más. **Importante:** un droplet *apagado* en DO
+      sigue facturando el 100% del precio (el disco/IP siguen reservados) — apagarlo NO ahorra nada, solo
+      destruirlo lo hace. Factura de DO baja a ~$6/mes recién después de destruir droplet viejo + ambos
+      snapshots (ver próximo punto).
 - [ ] Destruir snapshot huérfano `smartsolutions-1779244513767` (6.36GB, ~$0.40/mes) — confirmar con Simón si
       el snapshot manual `bodega-backup` (2026-08-08) también se puede borrar una vez el droplet nuevo esté
       confirmado, o si se quiere conservar como resguardo aparte.
