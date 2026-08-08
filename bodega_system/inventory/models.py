@@ -314,3 +314,114 @@ class ComboItem(models.Model):
 
     def __str__(self):
         return f"{self.combo.name} - {self.product.name} ({self.quantity})"
+
+
+class InventoryCount(models.Model):
+    """Cabecera de una auditoría de conteo físico de la bodega.
+
+    Queda como registro permanente (no es un formulario de un solo uso) para
+    poder revisar auditorías pasadas. Ver docs/specs/auditoria-inventario.md.
+    """
+    STATUS_CHOICES = (
+        ('in_progress', 'En Progreso'),
+        ('completed', 'Completado'),
+    )
+
+    date = models.DateTimeField(auto_now_add=True, verbose_name="Fecha")
+    category = models.ForeignKey(
+        Category,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='inventory_counts',
+        verbose_name="Categoría",
+        help_text="Vacío si el conteo fue de todas las categorías"
+    )
+    counted_by = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.PROTECT,
+        related_name='inventory_counts',
+        verbose_name="Realizado por"
+    )
+    status = models.CharField(
+        max_length=15,
+        choices=STATUS_CHOICES,
+        default='completed',
+        verbose_name="Estado"
+    )
+    notes = models.TextField(blank=True, verbose_name="Notas")
+
+    class Meta:
+        verbose_name = "Conteo de Inventario"
+        verbose_name_plural = "Conteos de Inventario"
+        ordering = ['-date']
+
+    def __str__(self):
+        categoria = self.category.name if self.category else "Todas las categorías"
+        return f"Conteo del {self.date.strftime('%d/%m/%Y')} - {categoria}"
+
+    @property
+    def items_with_difference(self):
+        return self.items.exclude(difference=0)
+
+    @property
+    def total_difference_value_usd(self):
+        return sum(
+            (item.difference_value_usd for item in self.items_with_difference),
+            Decimal('0.00')
+        )
+
+
+class InventoryCountItem(models.Model):
+    """Línea de un InventoryCount: stock del sistema (snapshot) vs físico contado.
+
+    system_stock se guarda al momento del conteo y NO se recalcula después,
+    para que el reporte de una auditoría vieja no cambie si el stock del
+    sistema se sigue moviendo (ver spec, Decisions Already Made).
+    """
+    count = models.ForeignKey(
+        InventoryCount,
+        on_delete=models.CASCADE,
+        related_name='items',
+        verbose_name="Conteo"
+    )
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.PROTECT,
+        related_name='count_items',
+        verbose_name="Producto"
+    )
+    system_stock = models.DecimalField(
+        max_digits=10,
+        decimal_places=3,
+        verbose_name="Stock del Sistema",
+        help_text="Snapshot de Product.stock al momento del conteo"
+    )
+    physical_stock = models.DecimalField(
+        max_digits=10,
+        decimal_places=3,
+        verbose_name="Stock Físico Contado"
+    )
+    difference = models.DecimalField(
+        max_digits=10,
+        decimal_places=3,
+        verbose_name="Diferencia",
+        help_text="physical_stock - system_stock; negativo = falta stock"
+    )
+
+    class Meta:
+        verbose_name = "Ítem de Conteo"
+        verbose_name_plural = "Ítems de Conteo"
+        unique_together = ['count', 'product']
+        ordering = ['product__name']
+
+    def save(self, *args, **kwargs):
+        self.difference = self.physical_stock - self.system_stock
+        super().save(*args, **kwargs)
+
+    @property
+    def difference_value_usd(self):
+        return self.difference * self.product.purchase_price_usd
+
+    def __str__(self):
+        return f"{self.product.name} - sistema: {self.system_stock} / físico: {self.physical_stock}"

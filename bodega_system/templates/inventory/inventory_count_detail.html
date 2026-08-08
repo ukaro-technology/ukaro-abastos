@@ -1,0 +1,84 @@
+{% extends 'base/base.html' %}
+{% block title %}Conteo #{{ count.pk }}{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="bg-white rounded-xl shadow-md p-5 sm:p-6">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-800">Conteo #{{ count.pk }}</h1>
+                <p class="text-sm text-gray-500 mt-1">
+                    {{ count.date|date:"d/m/Y H:i" }} —
+                    {% if count.category %}{{ count.category.name }}{% else %}Todas las categorías{% endif %}
+                    — por {{ count.counted_by.get_full_name|default:count.counted_by.username }}
+                </p>
+                {% if count.notes %}<p class="text-sm text-gray-500 mt-1">{{ count.notes }}</p>{% endif %}
+            </div>
+            <a href="?format=pdf"
+               class="inline-flex items-center bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-lg transition-colors text-sm">
+                Exportar PDF
+            </a>
+        </div>
+    </div>
+
+    <!-- Mini stats -->
+    <div class="grid grid-cols-3 gap-3 sm:gap-4">
+        <div class="bg-white rounded-xl shadow-sm p-4 border-l-4 border-blue-500">
+            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Contados</p>
+            <p class="text-2xl font-bold text-gray-800 mt-1">{{ totals.contados }}</p>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm p-4 border-l-4 border-yellow-500">
+            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Con diferencia</p>
+            <p class="text-2xl font-bold text-gray-800 mt-1">{{ totals.con_diferencia }}</p>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm p-4 border-l-4 {% if totals.valor_diferencia_usd < 0 %}border-red-500{% else %}border-green-500{% endif %}">
+            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Valor diferencia</p>
+            <p class="text-2xl font-bold text-gray-800 mt-1">${{ totals.valor_diferencia_usd|floatformat:2 }}</p>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-md overflow-hidden">
+        <div class="px-5 py-4 border-b border-gray-200">
+            <h2 class="text-base font-semibold text-gray-800">Productos con diferencia</h2>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Producto</th>
+                        <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Sistema</th>
+                        <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Físico</th>
+                        <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Diferencia</th>
+                        <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Valor USD</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200">
+                    {% for item in items_con_diferencia %}
+                    <tr>
+                        <td class="px-4 py-2 text-sm text-gray-800">
+                            <a href="{% url 'inventory:product_traceability' item.product.pk %}" class="hover:text-blue-600 hover:underline">
+                                {{ item.product.name }}
+                            </a>
+                        </td>
+                        <td class="px-4 py-2 text-sm text-gray-500 text-right">{{ item.system_stock }}</td>
+                        <td class="px-4 py-2 text-sm text-gray-500 text-right">{{ item.physical_stock }}</td>
+                        <td class="px-4 py-2 text-sm text-right font-medium {% if item.difference < 0 %}text-red-600{% else %}text-green-600{% endif %}">
+                            {{ item.difference }}
+                        </td>
+                        <td class="px-4 py-2 text-sm text-right font-medium {% if item.difference_value_usd < 0 %}text-red-600{% else %}text-green-600{% endif %}">
+                            ${{ item.difference_value_usd|floatformat:2 }}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="5" class="px-4 py-8 text-center text-sm text-gray-500">Sin diferencias — el conteo físico coincide con el sistema.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="text-center">
+        <a href="{% url 'inventory:inventory_count_list' %}" class="text-sm text-blue-600 hover:underline">← Ver todos los conteos</a>
+    </div>
+</div>
+{% endblock %}

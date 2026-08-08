@@ -1,0 +1,70 @@
+{% extends 'base/base.html' %}
+{% block title %}Conteo de Inventario{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="bg-white rounded-xl shadow-md p-5 sm:p-6">
+        <h1 class="text-2xl font-bold text-gray-800">Conteo de Inventario</h1>
+        <p class="text-sm text-gray-500 mt-1">
+            {% if category %}Categoría: <strong>{{ category.name }}</strong>{% else %}Todas las categorías{% endif %}
+            — dejá en blanco los productos que no contaste, no se van a incluir en el reporte.
+        </p>
+    </div>
+
+    <form method="post" action="{% url 'inventory:inventory_count_create' %}" class="space-y-6">
+        {% csrf_token %}
+        <input type="hidden" name="category" value="{{ category_id }}">
+
+        <div class="bg-white rounded-xl shadow-md overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Producto</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Código</th>
+                            <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Stock sistema</th>
+                            <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Stock físico</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200">
+                        {% for product in products %}
+                        <tr>
+                            <td class="px-4 py-2 text-sm text-gray-800">{{ product.name }}</td>
+                            <td class="px-4 py-2 text-sm text-gray-500">{{ product.barcode|default:"—" }}</td>
+                            <td class="px-4 py-2 text-sm text-gray-500 text-right">{{ product.stock }}</td>
+                            <td class="px-4 py-2 text-right">
+                                <input type="number" step="0.001" min="0"
+                                       name="physical_stock_{{ product.pk }}"
+                                       placeholder="—"
+                                       class="w-28 text-right shadow-sm focus:ring-green-500 focus:border-green-500 border-gray-300 rounded-md min-h-[38px] px-2 py-1">
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="4" class="px-4 py-6 text-center text-sm text-gray-500">No hay productos activos en esta categoría.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-md p-5 sm:p-6 space-y-4">
+            <div class="space-y-1">
+                <label for="notes" class="block text-sm font-medium text-gray-700">Notas (opcional)</label>
+                <textarea id="notes" name="notes" rows="2"
+                          class="shadow-sm focus:ring-green-500 focus:border-green-500 block w-full text-sm border-gray-300 rounded-md px-3 py-2"
+                          placeholder="Ej: conteo mensual de agosto"></textarea>
+            </div>
+            <div class="flex gap-3">
+                <button type="submit"
+                        class="inline-flex items-center bg-green-600 hover:bg-green-700 text-white font-medium py-2.5 px-6 rounded-lg transition-colors">
+                    Guardar conteo
+                </button>
+                <a href="{% url 'inventory:inventory_count_create' %}"
+                   class="inline-flex items-center bg-white border border-gray-300 text-gray-700 font-medium py-2.5 px-6 rounded-lg hover:bg-gray-50 transition-colors">
+                    Cancelar
+                </a>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}

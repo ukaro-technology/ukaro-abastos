@@ -1,0 +1,88 @@
+{% extends 'base/base.html' %}
+{% block title %}Trazabilidad — {{ product.name }}{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="bg-white rounded-xl shadow-md p-5 sm:p-6">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-800">{{ product.name }}</h1>
+                <p class="text-sm text-gray-500 mt-1">
+                    Código: {{ product.barcode|default:"—" }} — Stock actual: <strong>{{ product.stock }}</strong>
+                </p>
+            </div>
+            <a href="?{{ request.GET.urlencode }}&format=pdf"
+               class="inline-flex items-center bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-lg transition-colors text-sm">
+                Exportar PDF
+            </a>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-md p-5 sm:p-6">
+        <form method="get" class="flex flex-col sm:flex-row items-end gap-4">
+            <div class="space-y-1">
+                <label for="date_from" class="block text-sm font-medium text-gray-700">Desde</label>
+                <input type="date" id="date_from" name="date_from" value="{{ date_from }}"
+                       class="shadow-sm focus:ring-green-500 focus:border-green-500 block w-full text-sm border-gray-300 rounded-md min-h-[38px] px-3 py-2">
+            </div>
+            <div class="space-y-1">
+                <label for="date_to" class="block text-sm font-medium text-gray-700">Hasta</label>
+                <input type="date" id="date_to" name="date_to" value="{{ date_to }}"
+                       class="shadow-sm focus:ring-green-500 focus:border-green-500 block w-full text-sm border-gray-300 rounded-md min-h-[38px] px-3 py-2">
+            </div>
+            <button type="submit"
+                    class="inline-flex items-center bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors text-sm min-h-[38px]">
+                Filtrar
+            </button>
+        </form>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-md overflow-hidden">
+        <div class="px-5 py-4 border-b border-gray-200">
+            <h2 class="text-base font-semibold text-gray-800">Línea de tiempo ({{ eventos|length }} evento{{ eventos|length|pluralize }})</h2>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Referencia</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Detalle</th>
+                        <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Cambio</th>
+                        <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Stock resultante</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200">
+                    {% for e in eventos %}
+                    <tr>
+                        <td class="px-4 py-2 text-sm text-gray-500 whitespace-nowrap">{{ e.date|date:"d/m/Y H:i" }}</td>
+                        <td class="px-4 py-2 text-sm">
+                            {% if e.tipo == 'venta' %}
+                            <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800">↓ Venta</span>
+                            {% elif e.tipo == 'compra' %}
+                            <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800">↑ Compra</span>
+                            {% else %}
+                            <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">⇄ Ajuste</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-2 text-sm text-gray-800">{{ e.referencia }}</td>
+                        <td class="px-4 py-2 text-sm text-gray-500 truncate max-w-xs">{{ e.detalle }}</td>
+                        <td class="px-4 py-2 text-sm text-right font-medium {% if e.delta < 0 %}text-red-600{% else %}text-green-600{% endif %}">
+                            {{ e.delta|stringformat:"+g" }}
+                        </td>
+                        <td class="px-4 py-2 text-sm text-right text-gray-800">{{ e.stock_after }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="6" class="px-4 py-8 text-center text-sm text-gray-500">Sin eventos en este rango de fechas.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="text-center">
+        <a href="{% url 'inventory:product_detail' product.pk %}" class="text-sm text-blue-600 hover:underline">← Volver al producto</a>
+    </div>
+</div>
+{% endblock %}

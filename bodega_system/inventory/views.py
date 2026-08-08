@@ -7,11 +7,17 @@ from django.contrib import messages
 from django.db.models import F, Sum, Count
 from django.core.paginator import Paginator
 from django.db import transaction
+from django.utils import timezone
+from django.utils.dateparse import parse_date
+from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 
-from .models import Category, Product, InventoryAdjustment, ProductCombo, ComboItem
+from .models import (Category, Product, InventoryAdjustment, ProductCombo, ComboItem,
+                    InventoryCount, InventoryCountItem)
 from .forms import (CategoryForm, ProductForm, InventoryAdjustmentForm,
                    ProductComboForm, ComboItemFormset)
+from .services import TraceabilityService
+from .pdf_generators import pdf_inventory_count_report, pdf_product_traceability
 from utils.decorators import admin_required, inventory_access_required
 
 # Vistas de Productos - Empleados y Administradores (Solo Lectura para Empleados)
@@ -445,5 +451,159 @@ def combo_toggle_status(request, pk):
     
     status = "activado" if combo.is_active else "desactivado"
     messages.success(request, f'Combo "{combo.name}" {status} exitosamente.')
-    
+
     return redirect('inventory:combo_detail', pk=combo.pk)
+
+
+# Vistas de Auditoría de Inventario - Solo Administradores
+# Ver docs/specs/auditoria-inventario.md
+
+@admin_required
+def inventory_count_create(request):
+    """Vista para registrar un conteo físico de inventario.
+
+    Flujo en 2 pasos sobre la misma URL:
+    1. GET sin 'category' -> elegir categoría (o "todas") a contar.
+    2. GET con 'category' -> tabla de productos de esa categoría con un
+       input de stock físico por producto.
+    3. POST -> crea el InventoryCount + sus InventoryCountItem. Los
+       productos que se dejaron en blanco se saltan (no se "asume" 0).
+    """
+    if request.method == 'POST':
+        category_id = request.POST.get('category')
+        category = None
+        products = Product.objects.filter(is_active=True)
+        if category_id and category_id != 'all':
+            category = get_object_or_404(Category, pk=category_id)
+            products = products.filter(category=category)
+
+        with transaction.atomic():
+            count = InventoryCount.objects.create(
+                category=category,
+                counted_by=request.user,
+                notes=request.POST.get('notes', ''),
+            )
+            items_creados = 0
+            for product in products:
+                raw_value = request.POST.get(f'physical_stock_{product.pk}', '').strip()
+                if raw_value == '':
+                    continue  # producto no contado -> se salta, no se asume 0
+                try:
+                    physical_stock = Decimal(raw_value)
+                except InvalidOperation:
+                    continue
+                InventoryCountItem.objects.create(
+                    count=count,
+                    product=product,
+                    system_stock=product.stock,
+                    physical_stock=physical_stock,
+                )
+                items_creados += 1
+
+            if items_creados == 0:
+                count.delete()
+                messages.warning(request, 'No se registró ningún producto contado — el conteo no se guardó.')
+                return redirect('inventory:inventory_count_create')
+
+        messages.success(request, f'Conteo registrado con {items_creados} producto(s).')
+        return redirect('inventory:inventory_count_detail', pk=count.pk)
+
+    category_id = request.GET.get('category')
+    if not category_id:
+        categories = Category.objects.order_by('name')
+        return render(request, 'inventory/inventory_count_select_category.html', {
+            'categories': categories,
+        })
+
+    category = None
+    products = Product.objects.filter(is_active=True)
+    if category_id != 'all':
+        category = get_object_or_404(Category, pk=category_id)
+        products = products.filter(category=category)
+    products = products.select_related('category').order_by('category__name', 'name')
+
+    return render(request, 'inventory/inventory_count_form.html', {
+        'category': category,
+        'category_id': category_id,
+        'products': products,
+    })
+
+
+@admin_required
+def inventory_count_detail(request, pk):
+    """Reporte de discrepancias de un conteo puntual — solo informativo,
+    no ajusta stock (ver docs/specs/auditoria-inventario.md, Scope)."""
+    count = get_object_or_404(
+        InventoryCount.objects.select_related('category', 'counted_by'),
+        pk=pk
+    )
+    items = count.items.select_related('product').order_by(
+        '-difference'
+    )
+    items_con_diferencia = [i for i in items if i.difference != 0]
+    items_con_diferencia.sort(key=lambda i: abs(i.difference_value_usd), reverse=True)
+
+    totals = {
+        'contados': items.count(),
+        'con_diferencia': len(items_con_diferencia),
+        'valor_diferencia_usd': count.total_difference_value_usd,
+    }
+
+    if request.GET.get('format') == 'pdf':
+        return pdf_inventory_count_report(count, items_con_diferencia, totals)
+
+    return render(request, 'inventory/inventory_count_detail.html', {
+        'count': count,
+        'items': items,
+        'items_con_diferencia': items_con_diferencia,
+        'totals': totals,
+    })
+
+
+@admin_required
+def inventory_count_list(request):
+    """Histórico de conteos de inventario realizados."""
+    counts = InventoryCount.objects.select_related('category', 'counted_by').order_by('-date')
+
+    paginator = Paginator(counts, 20)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    return render(request, 'inventory/inventory_count_list.html', {
+        'page_obj': page_obj,
+    })
+
+
+@admin_required
+def product_traceability(request, pk):
+    """Línea de tiempo combinada de todo lo que movió el stock de un
+    producto: ventas, ajustes manuales y compras recibidas. Ver
+    docs/specs/auditoria-inventario.md."""
+    product = get_object_or_404(Product, pk=pk)
+
+    date_from_str = request.GET.get('date_from', '')
+    date_to_str = request.GET.get('date_to', '')
+    if date_from_str:
+        date_from = parse_date(date_from_str)
+    else:
+        date_from = None
+    if date_to_str:
+        date_to = parse_date(date_to_str)
+    else:
+        date_to = None
+
+    if not date_from and not date_to:
+        date_to = timezone.now().date()
+        date_from = date_to - timedelta(days=30)
+
+    eventos = TraceabilityService.build_product_events(product, date_from, date_to)
+
+    if request.GET.get('format') == 'pdf':
+        return pdf_product_traceability(product, eventos, date_from, date_to)
+
+    return render(request, 'inventory/product_traceability.html', {
+        'product': product,
+        'eventos': eventos,
+        'date_from': date_from.isoformat() if date_from else '',
+        'date_to': date_to.isoformat() if date_to else '',
+    })

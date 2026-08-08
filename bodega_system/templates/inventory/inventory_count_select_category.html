@@ -1,0 +1,36 @@
+{% extends 'base/base.html' %}
+{% block title %}Nuevo Conteo de Inventario{% endblock %}
+
+{% block content %}
+<div class="space-y-6 max-w-lg mx-auto">
+    <div class="bg-white rounded-xl shadow-md p-5 sm:p-6">
+        <h1 class="text-2xl font-bold text-gray-800">Nuevo Conteo de Inventario</h1>
+        <p class="text-sm text-gray-500 mt-1">Elegí qué categoría vas a contar físicamente</p>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-md p-5 sm:p-6">
+        <form method="get" action="{% url 'inventory:inventory_count_create' %}" class="space-y-4">
+            <div class="space-y-1">
+                <label for="category" class="block text-sm font-medium text-gray-700">Categoría</label>
+                <select id="category" name="category"
+                        class="shadow-sm focus:ring-green-500 focus:border-green-500 block w-full text-base sm:text-sm border-gray-300 rounded-md min-h-[44px] sm:min-h-[38px] px-3 py-2">
+                    <option value="all">Todas las categorías</option>
+                    {% for cat in categories %}
+                    <option value="{{ cat.pk }}">{{ cat.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit"
+                    class="w-full inline-flex justify-center items-center bg-green-600 hover:bg-green-700 text-white font-medium py-2.5 px-4 rounded-lg transition-colors">
+                Continuar
+            </button>
+        </form>
+    </div>
+
+    <div class="text-center">
+        <a href="{% url 'inventory:inventory_count_list' %}" class="text-sm text-blue-600 hover:underline">
+            Ver conteos anteriores
+        </a>
+    </div>
+</div>
+{% endblock %}

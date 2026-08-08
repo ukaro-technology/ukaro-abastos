@@ -24,6 +24,12 @@ urlpatterns = [
     # Vistas de ajustes de inventario (existentes - mantener igual)
     path('adjustments/', views.adjustment_list, name='adjustment_list'),
     path('adjustments/add/', views.adjustment_create, name='adjustment_create'),
+
+    # Auditoría de inventario — ver docs/specs/auditoria-inventario.md
+    path('counts/', views.inventory_count_list, name='inventory_count_list'),
+    path('counts/new/', views.inventory_count_create, name='inventory_count_create'),
+    path('counts/<int:pk>/', views.inventory_count_detail, name='inventory_count_detail'),
+    path('products/<int:pk>/traceability/', views.product_traceability, name='product_traceability'),
     
     # Vistas de combos (agregar si tienes las vistas de combos)
     path('combos/', views.combo_list, name='combo_list'),

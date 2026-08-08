@@ -352,3 +352,92 @@ class ProductService:
         })
 
         return count
+
+
+class TraceabilityService:
+    """
+    Service Layer para trazabilidad de stock de un producto.
+
+    Ver docs/specs/auditoria-inventario.md. Combina las 3 fuentes que
+    mueven Product.stock en este sistema (ventas, ajustes manuales,
+    compras recibidas) en una sola línea de tiempo, con el stock
+    reconstruido antes/después de cada evento.
+    """
+
+    @staticmethod
+    def build_product_events(product, date_from=None, date_to=None):
+        """
+        Arma la línea de tiempo de eventos que movieron el stock de un producto.
+
+        Reconstruye el stock antes/después de cada evento partiendo del
+        stock ACTUAL (product.stock) y deshaciendo cada evento hacia atrás
+        en el tiempo — por eso se traen TODOS los eventos históricos del
+        producto (no solo los del rango pedido) y luego se filtra el rango
+        solo para mostrar, pero el cálculo de stock usa el historial
+        completo para ser exacto.
+
+        Asume que ventas, ajustes de inventario y recepción de compras son
+        las únicas formas en que el stock de un producto cambia en este
+        sistema (no hay otro código que edite Product.stock directamente
+        fuera de esos 3 flujos).
+
+        Args:
+            product: instancia de Product
+            date_from: date o None — límite inferior para MOSTRAR (no para calcular)
+            date_to: date o None — límite superior para MOSTRAR (no para calcular)
+
+        Returns:
+            list de dicts, ordenados del más reciente al más viejo, cada uno con:
+            date, tipo ('venta'|'ajuste'|'compra'), delta, stock_before,
+            stock_after, referencia, detalle
+        """
+        from sales.models import SaleItem
+        from suppliers.models import SupplierOrderItem
+
+        eventos = []
+
+        for item in SaleItem.objects.filter(product=product).select_related('sale'):
+            eventos.append({
+                'date': item.sale.date,
+                'tipo': 'venta',
+                'delta': -item.quantity,
+                'referencia': f'Venta #{item.sale.pk}',
+                'detalle': f'Cliente: {item.sale.customer.name if item.sale.customer else "s/d"}',
+            })
+
+        for adj in product.adjustments.select_related('adjusted_by'):
+            signo = 1 if adj.adjustment_type == 'add' else -1
+            delta = adj.new_stock - adj.previous_stock  # exacto, cubre también 'set'
+            eventos.append({
+                'date': adj.adjusted_at,
+                'tipo': 'ajuste',
+                'delta': delta,
+                'referencia': f'Ajuste #{adj.pk} ({adj.get_adjustment_type_display()})',
+                'detalle': adj.reason,
+            })
+
+        for item in SupplierOrderItem.objects.filter(
+            product=product, order__status='received'
+        ).select_related('order', 'order__supplier'):
+            eventos.append({
+                'date': item.order.received_date or item.order.order_date,
+                'tipo': 'compra',
+                'delta': item.quantity,
+                'referencia': f'Orden #{item.order.pk} ({item.order.supplier.name})',
+                'detalle': f'{item.quantity} recibidas',
+            })
+
+        eventos.sort(key=lambda e: e['date'], reverse=True)
+
+        stock_actual = product.stock
+        for evento in eventos:
+            evento['stock_after'] = stock_actual
+            evento['stock_before'] = stock_actual - evento['delta']
+            stock_actual = evento['stock_before']
+
+        if date_from:
+            eventos = [e for e in eventos if e['date'].date() >= date_from]
+        if date_to:
+            eventos = [e for e in eventos if e['date'].date() <= date_to]
+
+        return eventos
