@@ -301,6 +301,12 @@
                        class="w-full inline-flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
                         ✏️ Editar Producto
                     </a>
+                    {% if user.is_admin or user.is_superuser %}
+                    <a href="{% url 'inventory:product_traceability' product.pk %}"
+                       class="w-full inline-flex items-center justify-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors">
+                        🔍 Ver Trazabilidad Completa
+                    </a>
+                    {% endif %}
                 </div>
             </div>
         </div>

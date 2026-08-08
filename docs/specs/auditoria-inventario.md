@@ -106,13 +106,18 @@ compras recibidas) para poder explicar el número ante una auditoría.
 6. [x] Vista `product_traceability` (selector de producto + rango de fechas, timeline combinada)
 7. [x] `pdf_product_traceability()` (mismo patrón)
 8. [x] Templates (siguiendo el sistema de diseño ya usado en `inventory_report.html`/`adjustment_list.html`)
-9. [x] URLs (`inventory/urls.py`) — falta agregar entradas de menú/navegación visibles (ver Pendiente)
+9. [x] URLs (`inventory/urls.py`) + navegación visible — ver siguiente punto
 10. [x] Tests: `inventory/tests_audit.py`, 29 tests — cálculo de discrepancias, línea de tiempo de
     trazabilidad (orden cronológico, mezcla de las 3 fuentes, reconstrucción de stock), permisos
 11. [x] Verificación manual con datos reales de producción — ver §6 abajo
-
-**Pendiente, no bloqueante:** agregar entradas de menú/navegación visibles a "Conteos de Inventario"
-(las URLs funcionan mediante link directo, pero no hay un botón en el menú principal todavía).
+12. [x] **Navegación visible agregada (2026-08-08, corrigiendo un gap real que Simón encontró
+    probando):** las URLs funcionaban por link directo pero no había ningún botón para llegar ahí
+    navegando — mismo hueco preexistente que ya tenía `inventory:adjustment_list` en el proyecto (no
+    está linkeado desde ningún template tampoco, se confirmó con grep). Se agregaron 3 botones,
+    solo-admin, siguiendo el patrón visual ya existente en el proyecto:
+    - `product_list.html`: "Historial de Ajustes" (cerraba también el hueco preexistente) +
+      "Auditoría de Inventario" → `inventory_count_list`
+    - `product_detail.html`, bloque "⚡ Acciones": "Ver Trazabilidad Completa" → `product_traceability`
 
 ## 6. Verification (Cómo verificar)
 
