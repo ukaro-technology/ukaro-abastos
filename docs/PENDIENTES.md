@@ -1,6 +1,49 @@
 # Pendientes — Ukaro Abastos
 
 ## Decisiones activas
+- **EN CURSO — Recuperación de ventas del 10-11 jul 2026 (caída de DO por falta de pago).** DO estuvo caído
+  esos 2 días; Leida usó temporalmente una copia de abril del sistema reactivada en PythonAnywhere
+  (`bodegaleida.pythonanywhere.com`). Esas ventas nunca se pasaron a DO. Hoy (5-ago) el cliente reporta
+  **inventario descuadrado y reportes/finanzas que no cuadran** por ese hueco. Confirmado en código: los
+  reportes y el cierre diario (`finances/views.py`) se calculan en vivo desde `Sale.objects` filtrado por
+  fecha — no hay tabla de totales manuales — así que la única forma real de arreglarlo es recrear las
+  ventas de esos 2 días, no solo ajustar stock. Ya existía una herramienta previa de un incidente igual en
+  abril (`exportar_ventas_dia`/`ajuste_ventas_externas`, commit `76784ef`) pero **solo corrige inventario**,
+  no basta para este caso.
+  - **Construido y probado (con datos sintéticos en local, NO en producción):**
+    - `bodega_system/scripts/export_ventas_recuperacion_10_11_julio.py` — corre en el sistema origen
+      (`manage.py shell < ...`), exporta cada venta completa (cliente, método de pago, precios, crédito) a
+      JSON. Ya usado con éxito en PythonAnywhere (hubo que ajustarlo: esa instancia es *anterior* a la
+      migración del 5-abr-2026 que agregó `cedula` a `Customer`, así que ese campo no existe ahí — el script
+      ya lo maneja con `getattr()` y usa `phone`/`name` como respaldo).
+    - `bodega_system/sales/management/commands/importar_ventas_recuperadas.py` — recrea `Sale`+`SaleItem`+
+      `CustomerCredit` con la fecha original (bypassea `auto_now_add` con un `.update()` posterior) y
+      descuenta inventario (mismo efecto que `create_sale_api`, incluyendo `InventoryAdjustment` con motivo
+      trazable). Tiene `--dry-run` (default) / `--apply`, y es **idempotente** (marcador
+      `[Recuperado PA#<id>]` en `notes` evita duplicar si se corre dos veces). Combos se saltan y quedan
+      marcados para revisión manual (no hubo ninguno en la exportación real). Smoke test local con datos
+      sintéticos: fecha histórica OK, stock descontado OK, cliente/crédito asociados OK, duplicado detectado
+      OK. **Nunca corrido contra datos reales ni contra producción todavía.**
+  - **Exportación real de PythonAnywhere YA HECHA (8-ago):** JSON en
+    `/home/sabh/Escritorio/export_ventas_10_11_julio.json` (máquina de trabajo local, NO en el repo — son
+    datos de clientes/ventas reales, no debe subirse a git). **234 ventas**, rango real
+    `2026-07-10T08:41` → `2026-07-11T15:28`, **14 a crédito** (las 14 sí tienen nombre de cliente en el
+    JSON), **0 ítems de combo**, total USD sumado ≈ **$448.03**.
+  - **⚠️ Importante para la próxima sesión — cambió el droplet de producción el mismo 8-ago:** el import
+    (`--apply`) tiene que apuntar al droplet **NUEVO** `157.245.211.83`, NO al viejo `161.35.142.183` (ver
+    hallazgo de migración de droplet más abajo — el viejo quedó como rollback con `web` detenido y va a
+    destruirse en 24-48h). Correr contra el viejo no tendría efecto real y generaría confusión.
+  - **Sin campo `cedula` en el sistema origen** → el emparejamiento de las 14 ventas a crédito en DO va a
+    depender de nombre/teléfono, no es automático con certeza — el comando ya las flaguea como "aviso" en
+    vez de adivinar, para revisión manual antes de `--apply`.
+  - **Próximos pasos exactos para retomar:**
+    1. Backup real (`pg_dump`) de la base de producción del droplet **nuevo** antes de tocar nada.
+    2. Copiar `/home/sabh/Escritorio/export_ventas_10_11_julio.json` al droplet nuevo.
+    3. Correr `importar_ventas_recuperadas export_ventas_10_11_julio.json --dry-run` ahí, revisar TODOS los
+       avisos (especial atención a las 14 ventas a crédito).
+    4. Mostrarle el resultado a Simón y solo aplicar (`--apply`) con su confirmación explícita.
+    5. Verificar después: reportes de julio cuadrando, stock de productos más vendidos esos días, y que los
+       14 créditos quedaron bien asociados (o marcados para asociar a mano si no matchearon).
 - Cliente activo: Leida. LIVE en https://abastos.ukarosoft.com
 - Deploy policy: DigitalOcean (cumplido)
 - Deploy manual via Docker (SSH + docker compose). Sin GitHub Actions.
@@ -49,6 +92,9 @@
   hizo). Programar para un horario de bajo tráfico.
 
 ## Próximos pasos
+- [ ] **Recuperación de ventas 10-11 jul (ver decisión activa arriba)** — backup de la BD del droplet nuevo
+      → copiar JSON ya exportado → `importar_ventas_recuperadas ... --dry-run` → revisar avisos (14 créditos)
+      con Simón → `--apply` solo con su confirmación → verificar reportes/inventario/créditos después.
 - [ ] **Revisar `/root/ram_monitor/ram.log` del droplet NUEVO (157.245.211.83) en 24-48h** con tráfico real
       de un día completo de ventas — confirmar que 1GB aguanta cómodo antes de destruir el droplet viejo.
 - [ ] **Destruir droplet viejo (`562942552`, 161.35.142.183) una vez confirmada la estabilidad** — decisión
