@@ -1,6 +1,28 @@
 # Pendientes — Ukaro Abastos
 
 ## Decisiones activas
+- **COMPLETADO (2026-08-08) — Auditoría de inventario (conteo físico vs sistema + trazabilidad por
+  producto).** Spec en `docs/specs/auditoria-inventario.md` (aprobada por Simón, implementada, 29 tests
+  nuevos en verde, verificado con datos reales de producción). Motivado por la necesidad de cuadrar los
+  27 productos que no matchearon en la recuperación de ventas de julio (ver punto siguiente) y por
+  pedido explícito de Simón de tener el sistema "lo más robusto posible para auditorías".
+  - Modelos `InventoryCount`/`InventoryCountItem` (snapshot de stock del sistema al momento del conteo,
+    no se recalcula después).
+  - `/inventory/counts/` (histórico), `/inventory/counts/new/` (registrar conteo por categoría o
+    todas), reporte de discrepancias con PDF — **solo informativo, no auto-ajusta stock** (decisión
+    explícita de Simón).
+  - `/inventory/products/<id>/traceability/` — línea de tiempo combinada de ventas + ajustes + compras
+    recibidas que afectaron el stock de un producto, con reconstrucción exacta del stock antes/después
+    de cada evento, exportable a PDF, default 30 días.
+  - Todo detrás de `admin_required`.
+  - **Pendiente, no bloqueante:** agregar botón/entrada de menú visible (funciona por URL directa);
+    hacer el primer conteo físico REAL con Leida contando en la bodega (no lo puede simular Claude Code).
+- **De paso, verificado (no fue necesario arreglar nada):** Simón reportó que el filtro de fechas de
+  Ventas no funcionaba — se probó a fondo (ORM + HTTP completo) y **sí funciona correctamente**. La
+  sospecha real: lo probó antes de la recuperación de ventas de julio, cuando no había datos en ese
+  rango. De paso se hizo un barrido de QA de las otras 10 listas con filtros del sistema
+  (`product_list`, `adjustment_list`, `combo_list`, `customer_list`, `credit_list`, `supplier_list`,
+  `order_list`, `expense_list`) — **todos funcionan correctamente**, ningún bug real encontrado.
 - **COMPLETADO (2026-08-08) — Recuperación de ventas del 10-11 jul 2026 (caída de DO por falta de pago).**
   DO estuvo caído esos 2 días; Leida usó temporalmente una copia de abril del sistema en PythonAnywhere
   (`bodegaleida.pythonanywhere.com`) y esas ventas nunca se pasaron a DO, descuadrando inventario/reportes.

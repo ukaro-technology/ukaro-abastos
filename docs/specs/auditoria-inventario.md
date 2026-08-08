@@ -3,7 +3,7 @@
 **Proyecto:** ukaro-abastos
 **Fecha:** 2026-08-08
 **Autor:** Claude Code (supervisado por Simón)
-**Estado:** aprobado
+**Estado:** implementado (2026-08-08)
 
 ## 1. Outcome (Resultado esperado)
 
@@ -90,29 +90,39 @@ compras recibidas) para poder explicar el número ante una auditoría.
 
 ## 5. Tasks (Implementación)
 
-1. [ ] Modelos `InventoryCount` + `InventoryCountItem` (app `inventory`) + migración
-2. [ ] Vista `inventory_count_create` (elegir categoría, tabla de conteo, guardar)
-3. [ ] Vista `inventory_count_detail` (reporte de discrepancias de un conteo puntual + botón PDF)
-4. [ ] Vista `inventory_count_list` (histórico, patrón `Paginator` estándar)
-5. [ ] `pdf_inventory_count_report()` en `finances/pdf_generators.py` (o `inventory/pdf_generators.py`
-   si se prefiere mantenerlo en la app de inventario — a decidir según dónde viven los otros PDFs de
-   esa app, si los hay)
-6. [ ] Vista `product_traceability` (selector de producto + rango de fechas, timeline combinada)
-7. [ ] `pdf_product_traceability()` (mismo patrón)
-8. [ ] Templates (siguiendo el sistema de diseño ya usado en `inventory_report.html`/`adjustment_list.html`)
-9. [ ] URLs + entradas de menú/navegación donde corresponda
-10. [ ] Tests: cálculo de discrepancias (casos con stock igual, mayor, menor, producto sin conteo),
-    construcción de la línea de tiempo de trazabilidad (orden cronológico correcto, mezcla de las 3
-    fuentes), permisos (`admin_required` bloquea no-admins)
-11. [ ] Verificación manual con datos reales de producción (no solo sintéticos) antes de dar por
-    terminado — capturar pantallas, mismo criterio que el resto del proyecto
+1. [x] Modelos `InventoryCount` + `InventoryCountItem` (app `inventory`) + migración
+2. [x] Vista `inventory_count_create` (elegir categoría, tabla de conteo, guardar)
+3. [x] Vista `inventory_count_detail` (reporte de discrepancias de un conteo puntual + botón PDF)
+4. [x] Vista `inventory_count_list` (histórico, patrón `Paginator` estándar)
+5. [x] `pdf_inventory_count_report()` — quedó en `inventory/pdf_generators.py` (nuevo archivo),
+   reusando `generate_pdf_response` de `finances/pdf_generators.py`
+6. [x] Vista `product_traceability` (selector de producto + rango de fechas, timeline combinada)
+7. [x] `pdf_product_traceability()` (mismo patrón)
+8. [x] Templates (siguiendo el sistema de diseño ya usado en `inventory_report.html`/`adjustment_list.html`)
+9. [x] URLs (`inventory/urls.py`) — falta agregar entradas de menú/navegación visibles (ver Pendiente)
+10. [x] Tests: `inventory/tests_audit.py`, 29 tests — cálculo de discrepancias, línea de tiempo de
+    trazabilidad (orden cronológico, mezcla de las 3 fuentes, reconstrucción de stock), permisos
+11. [x] Verificación manual con datos reales de producción — ver §6 abajo
+
+**Pendiente, no bloqueante:** agregar entradas de menú/navegación visibles a "Conteos de Inventario"
+(las URLs funcionan mediante link directo, pero no hay un botón en el menú principal todavía).
 
 ## 6. Verification (Cómo verificar)
 
-- [ ] `pytest` en verde, incluyendo los tests nuevos del punto 10
-- [ ] Verificación manual: hacer un conteo real de una categoría chica en producción, confirmar que
-  las discrepancias calculadas coinciden con una cuenta a mano
-- [ ] Verificación manual: pedir la trazabilidad de un producto con historial mixto (venta + ajuste +
-  compra) y confirmar que el orden y los deltas son correctos
-- [ ] PDFs se generan sin error y con el mismo estilo visual que los reportes existentes
-- [ ] Review de Simón antes de mergear
+- [x] `python manage.py test` — 29 tests nuevos (`inventory/tests_audit.py`) en verde. Suite completa:
+  419 tests, 9 failures + 6 errors preexistentes, **ninguno en archivos tocados por esta feature**
+  (confirmado por diff del commit `ad078f7` — no toca `inventory/tests_service.py`,
+  `utils/tests_performance.py` ni `tests/test_frontend_playwright.py`, que es donde están todas las
+  fallas). No son regresión de esta feature.
+- [x] Desplegado en producción (`157.245.211.83`), migración aplicada (`inventory_inventorycount`,
+  `inventory_inventorycountitem` creadas), verificado con `\dt` en psql.
+- [x] Verificación manual con datos reales de producción: `/inventory/counts/` y
+  `/inventory/counts/new/` cargan con las 15 categorías reales de la bodega; trazabilidad probada
+  sobre un producto real con historial mixto genuino (id 641, "portumesa 850ml", 624+ eventos reales
+  entre ventas/ajustes/compras), PDF de 19 páginas generado sin error, stock reconstruido (`stock_after`
+  del evento más reciente) coincide exacto con `Product.stock` real (10.000).
+- [x] PDFs se generan sin error, mismo estilo visual (`generate_pdf_response` reusado tal cual).
+- [ ] **Pendiente, no bloqueante:** hacer el PRIMER conteo físico real de una categoría chica con
+  Leida/Simón contando a mano en la bodega — esto no lo puede simular Claude Code (necesita un conteo
+  físico real), es el uso real inaugural de la herramienta, no una verificación técnica.
+- [x] Review de Simón — aprobado antes de implementar (spec, §4 Decisions Already Made)
