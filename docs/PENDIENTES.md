@@ -1,20 +1,39 @@
 # Pendientes — Ukaro Abastos
 
 ## Decisiones activas
-- Cliente activo: Leida. LIVE en https://abastos.ukarosoft.com (DigitalOcean 161.35.142.183)
+- Cliente activo: Leida. LIVE en https://abastos.ukarosoft.com
 - Deploy policy: DigitalOcean (cumplido)
 - Deploy manual via Docker (SSH + docker compose). Sin GitHub Actions.
-- SSL: Let's Encrypt (Certbot webroot), renovación por cron (host, 3am diario). Cert expira 2026-08-31.
-- **Migración de droplet $12→$6/mes en curso (2026-08-08)** — el disco NUNCA fue el cuello de botella real
-  (DB 86MB, uso real 8.1G/48G tras limpieza). El riesgo real es RAM: el plan de $6/mes trae 1GB (no 2GB), y el
-  droplet actual estaba en 84% de uso con gunicorn sin `--max-requests` (workers creciendo sin techo en 27
-  días de uptime, hasta 1.08GB solo el contenedor web). Aplicado ya: `--max-requests 500
-  --max-requests-jitter 50` (commit `2903f4b`, desplegado en prod) + swap de 2GB en el droplet actual. Con
-  esto el uso total bajó de 84% a 37% (706Mi/1.9Gi) tras el restart. **Monitoreo activo en el servidor**
-  (`/root/ram_monitor/ram.log`, cron cada 15 min) para confirmar que se mantiene bajo con tráfico real
-   24-48h antes de decidir migrar. Plan si se confirma: Camino B (droplet nuevo desde cero, NO snapshot — DO
-  no permite reducir el disco asignado de un snapshot, así que Camino A está descartado de entrada).
-  Pendiente doctl (Simón todavía no generó el token de API).
+- SSL: Let's Encrypt (Certbot webroot), renovación por cron (host, 3am diario). Cert nuevo expira 2026-11-06.
+- **Migración de droplet $12→$6/mes COMPLETADA (2026-08-08).** Droplet nuevo:
+  `ubuntu-s-1vcpu-1gb-nyc3-01` (ID `590854857`, IP `157.245.211.83`, nyc3, 1GB/25GB, mismo VPC). Droplet viejo
+  `ubuntu-s-1vcpu-2gb-nyc3-01` (ID `562942552`, IP `161.35.142.183`) **sigue corriendo como rollback** — `db` y
+  `nginx` arriba, `web` detenido a propósito (evita escrituras divergentes; nginx ahí devuelve 502 a quien
+  todavía le resuelva la IP vieja). **No destruir hasta confirmar unos días de estabilidad real en el nuevo.**
+  - Causa raíz real (no la sospechada originalmente): el disco NUNCA fue el cuello de botella (DB 86MB, uso
+    real 8.1G/48G tras limpieza en el viejo). El riesgo real era RAM: gunicorn sin `--max-requests` dejaba
+    crecer los workers sin techo (27 días de uptime → 1.08GB solo el contenedor web, 84% de RAM total). Fix:
+    `--max-requests 500 --max-requests-jitter 50` (commit `2903f4b`) + swap 2GB — bajó a 37% en el viejo.
+    Camino A (snapshot+resize) descartado de entrada: DO no permite reducir el disco asignado de un snapshot.
+  - Migración real: Camino B (droplet nuevo desde cero) — Docker + git clone (`origin/main` commit `d8228db`)
+    + `.env` copiado + swap 2GB + `--max-requests` desde el arranque + `pg_dump`/`pg_restore` (conteos
+    verificados idénticos: 51044 ventas, 982 productos, 66 clientes, 7 usuarios).
+  - **DNS de `ukarosoft.com` vive en Google Domains/Cloud DNS, no en DigitalOcean** — no hay DNS-01
+    automatizable con el token de DO. Cert emitido post-cutover vía HTTP-01 (webroot) contra un
+    `nginx.conf` "bootstrap" temporal (solo HTTP, sin bloque 443) para evitar el problema de huevo-y-gallina
+    de nginx no arrancando sin un cert que todavía no existía. Cutover: Simón cambió el A record → se detuvo
+    `web` en el viejo → propagación ya confirmada en Google/Cloudflare/Quad9/OpenDNS → cert emitido → swap al
+    `nginx.conf` real. **Nota para la próxima vez:** un `docker compose restart` de nginx no siempre
+    recarga de verdad (visto en esta sesión, causó ~10 min de diagnóstico de un 502 fantasma que en
+    realidad era DNS cacheado en la propia máquina de trabajo, no un problema del servidor) — usar
+    `up -d --force-recreate --no-deps` para garantizar un reload real.
+  - Cron de renovación de cert + monitoreo de RAM (`/root/ram_monitor/ram.log`, cada 15 min) replicados en
+    el droplet nuevo, mismo criterio que el viejo.
+  - Token de API de DigitalOcean generado por Simón y usado vía `doctl` (instalado en
+    `~/.local/bin/doctl` en la máquina de trabajo) — no hay backups automáticos de DO activados (verificado,
+    `backup_ids: None`). Snapshot huérfano `smartsolutions-1779244513767` (6.36GB, ~$0.40/mes) sigue sin
+    limpiar — pendiente. Hay además un snapshot manual reciente `bodega-backup` (2026-08-08, 7.86GB) que
+    Simón generó por su cuenta como resguardo extra antes de esta sesión.
 - **Hallazgo aparte, no bloqueante:** servidor tenía el puntero de git 6 commits atrás de `origin/main`
   (reconciliado en esta sesión con `git stash && git pull --ff-only && git stash pop`, sin pérdida — el
   contenido ya coincidía con origin/main, solo faltaba el pull). Volver a verificar antes de cualquier deploy
@@ -30,13 +49,19 @@
   hizo). Programar para un horario de bajo tráfico.
 
 ## Próximos pasos
-- [ ] **Migración droplet DO $12→$6/mes** — revisar `/root/ram_monitor/ram.log` en 24-48h (después de
-      2026-08-08 ~05:00 UTC) y decidir si el uso estable entra cómodo en 1GB. Si sí: Camino B (droplet nuevo,
-      Ubuntu limpio + git clone + docker compose + restaurar DB con pg_dump + swap+max-requests desde el
-      arranque + cutover DNS del subdominio `abastos.ukarosoft.com` + cert Let's Encrypt nuevo). Backup de DB
-      verificado y descargado localmente ANTES de cualquier paso irreversible.
-- [ ] Configurar rotación de logs del daemon de Docker (ver hallazgo arriba) — horario de bajo tráfico.
+- [ ] **Revisar `/root/ram_monitor/ram.log` del droplet NUEVO (157.245.211.83) en 24-48h** con tráfico real
+      de un día completo de ventas — confirmar que 1GB aguanta cómodo antes de destruir el droplet viejo.
+- [ ] **Destruir droplet viejo (`562942552`, 161.35.142.183) una vez confirmada la estabilidad** (unos días de
+      margen, no antes) — factura de DO debería reflejar ~$6/mes después.
+- [ ] Destruir snapshot huérfano `smartsolutions-1779244513767` (6.36GB, ~$0.40/mes) — confirmar con Simón si
+      el snapshot manual `bodega-backup` (2026-08-08) también se puede borrar una vez el droplet nuevo esté
+      confirmado, o si se quiere conservar como resguardo aparte.
+- [ ] Configurar rotación de logs del daemon de Docker en el droplet NUEVO (ver hallazgo arriba) — horario de
+      bajo tráfico, reinicia los 3 contenedores a la vez.
 - [ ] Rotación + copia externa de los backups JSON manuales (`/app/backups` en el contenedor web).
+- [ ] Arreglar el servicio `certbot` en `docker-compose.yml` — no tiene `networks:` explícito, así que cae en
+      la red default de Compose en vez de `abastos_network` (funciona igual porque solo necesita los
+      volúmenes compartidos, pero es inconsistente con el resto de los servicios).
 - [ ] **CI/CD pipeline** (GitHub Actions) — auto-deploy al push en main
 
 ## Completado
