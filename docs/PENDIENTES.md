@@ -1,49 +1,38 @@
 # Pendientes — Ukaro Abastos
 
 ## Decisiones activas
-- **EN CURSO — Recuperación de ventas del 10-11 jul 2026 (caída de DO por falta de pago).** DO estuvo caído
-  esos 2 días; Leida usó temporalmente una copia de abril del sistema reactivada en PythonAnywhere
-  (`bodegaleida.pythonanywhere.com`). Esas ventas nunca se pasaron a DO. Hoy (5-ago) el cliente reporta
-  **inventario descuadrado y reportes/finanzas que no cuadran** por ese hueco. Confirmado en código: los
-  reportes y el cierre diario (`finances/views.py`) se calculan en vivo desde `Sale.objects` filtrado por
-  fecha — no hay tabla de totales manuales — así que la única forma real de arreglarlo es recrear las
-  ventas de esos 2 días, no solo ajustar stock. Ya existía una herramienta previa de un incidente igual en
-  abril (`exportar_ventas_dia`/`ajuste_ventas_externas`, commit `76784ef`) pero **solo corrige inventario**,
-  no basta para este caso.
-  - **Construido y probado (con datos sintéticos en local, NO en producción):**
-    - `bodega_system/scripts/export_ventas_recuperacion_10_11_julio.py` — corre en el sistema origen
-      (`manage.py shell < ...`), exporta cada venta completa (cliente, método de pago, precios, crédito) a
-      JSON. Ya usado con éxito en PythonAnywhere (hubo que ajustarlo: esa instancia es *anterior* a la
-      migración del 5-abr-2026 que agregó `cedula` a `Customer`, así que ese campo no existe ahí — el script
-      ya lo maneja con `getattr()` y usa `phone`/`name` como respaldo).
-    - `bodega_system/sales/management/commands/importar_ventas_recuperadas.py` — recrea `Sale`+`SaleItem`+
-      `CustomerCredit` con la fecha original (bypassea `auto_now_add` con un `.update()` posterior) y
-      descuenta inventario (mismo efecto que `create_sale_api`, incluyendo `InventoryAdjustment` con motivo
-      trazable). Tiene `--dry-run` (default) / `--apply`, y es **idempotente** (marcador
-      `[Recuperado PA#<id>]` en `notes` evita duplicar si se corre dos veces). Combos se saltan y quedan
-      marcados para revisión manual (no hubo ninguno en la exportación real). Smoke test local con datos
-      sintéticos: fecha histórica OK, stock descontado OK, cliente/crédito asociados OK, duplicado detectado
-      OK. **Nunca corrido contra datos reales ni contra producción todavía.**
-  - **Exportación real de PythonAnywhere YA HECHA (8-ago):** JSON en
-    `/home/sabh/Escritorio/export_ventas_10_11_julio.json` (máquina de trabajo local, NO en el repo — son
-    datos de clientes/ventas reales, no debe subirse a git). **234 ventas**, rango real
-    `2026-07-10T08:41` → `2026-07-11T15:28`, **14 a crédito** (las 14 sí tienen nombre de cliente en el
-    JSON), **0 ítems de combo**, total USD sumado ≈ **$448.03**.
-  - **⚠️ Importante para la próxima sesión — cambió el droplet de producción el mismo 8-ago:** el import
-    (`--apply`) tiene que apuntar al droplet **NUEVO** `157.245.211.83`, NO al viejo `161.35.142.183` (ver
-    hallazgo de migración de droplet más abajo — el viejo quedó como rollback con `web` detenido y va a
-    destruirse en 24-48h). Correr contra el viejo no tendría efecto real y generaría confusión.
-  - **Sin campo `cedula` en el sistema origen** → el emparejamiento de las 14 ventas a crédito en DO va a
-    depender de nombre/teléfono, no es automático con certeza — el comando ya las flaguea como "aviso" en
-    vez de adivinar, para revisión manual antes de `--apply`.
-  - **Próximos pasos exactos para retomar:**
-    1. Backup real (`pg_dump`) de la base de producción del droplet **nuevo** antes de tocar nada.
-    2. Copiar `/home/sabh/Escritorio/export_ventas_10_11_julio.json` al droplet nuevo.
-    3. Correr `importar_ventas_recuperadas export_ventas_10_11_julio.json --dry-run` ahí, revisar TODOS los
-       avisos (especial atención a las 14 ventas a crédito).
-    4. Mostrarle el resultado a Simón y solo aplicar (`--apply`) con su confirmación explícita.
-    5. Verificar después: reportes de julio cuadrando, stock de productos más vendidos esos días, y que los
-       14 créditos quedaron bien asociados (o marcados para asociar a mano si no matchearon).
+- **COMPLETADO (2026-08-08) — Recuperación de ventas del 10-11 jul 2026 (caída de DO por falta de pago).**
+  DO estuvo caído esos 2 días; Leida usó temporalmente una copia de abril del sistema en PythonAnywhere
+  (`bodegaleida.pythonanywhere.com`) y esas ventas nunca se pasaron a DO, descuadrando inventario/reportes.
+  - Backup fresco (`pg_dump`, verificado con `pg_restore --list`) del droplet nuevo (`157.245.211.83`) ANTES
+    de tocar nada.
+  - Export real de PythonAnywhere (234 ventas, 10/07 08:41 → 11/07 15:28, 14 a crédito, 0 combos, ≈$448.03)
+    ya traído a `/home/sabh/Escritorio/export_ventas_10_11_julio.json` (local, NO en git — datos reales de
+    clientes).
+  - `--dry-run` revisado antes de aplicar: **207 ventas válidas, 27 sin ítems** (producto no existe en DO
+    por barcode — típicamente productos con barcode "manual"/de texto tipo `huevo`, `SUN2`, `bolsap`, etc.
+    que no coinciden con el catálogo actual; **quedaron sin importar, pendiente revisión manual** si Leida
+    quiere agregarlas a mano).
+  - `--apply` corrido: **207 ventas recreadas** con inventario descontado (`InventoryAdjustment` trazable),
+    fecha original preservada, marcador `[Recuperado PA#<id>]` en `notes` (idempotente).
+  - **Créditos — decisión explícita de Simón:** de las 14 ventas a crédito del lote, **solo se dejó como
+    deuda real rastreada la de Anita** (cliente ya existente, id 120, cédula 26636968, tel 04160584897,
+    venta PA#26100, $1.05, vence 2026-08-09) — enlazada a mano vía ORM (`Sale.customer` + `CustomerCredit`
+    creado manualmente, porque el matching automático por cédula no aplica: el sistema origen es anterior a
+    que `Customer` tuviera ese campo). **Los otros 13 créditos (~$64.22 total: Pacheco andres hijo x2, la
+    negra miguelito x3, evelin negro bello, La nena, tio ami, Andrea vecina, Isbelia, Dra Ortega los caneyes
+    x2, Simon) se importaron como venta normal (`is_credit=True` preservado, inventario/ingreso correctos)
+    pero SIN `CustomerCredit`** — no quedan como deuda por cobrar en el sistema, a pedido explícito del
+    cliente. Si en el futuro se necesita revertir esto para alguno, están identificables por el marcador
+    `[Recuperado PA#<id>]` en `Sale.notes` (ids PA#26054, 26067, 26070, 26073, 26074, 26083, 26145, 26154,
+    26167, 26198, 26241, 26242, 26258).
+  - Verificado post-import: 207 recuperadas, 14 con `is_credit=True`, 1 con cliente asociado, 1
+    `CustomerCredit` creado (Anita, id 1861).
+  - **Pendiente, no bloqueante:** las 27 ventas sin ítems válidos (producto no matcheado por barcode) — si
+    Leida quiere esos datos también, hay que mapear esos barcodes/nombres a mano contra el catálogo actual.
+  - Nota de proceso: el comando `importar_ventas_recuperadas` solo tiene `--apply` (default = dry-run); su
+    propio comentario interno menciona un `--dry-run` que no existe como flag — corregir el comentario en
+    algún momento para no confundir a la próxima persona.
 - Cliente activo: Leida. LIVE en https://abastos.ukarosoft.com
 - Deploy policy: DigitalOcean (cumplido)
 - Deploy manual via Docker (SSH + docker compose). Sin GitHub Actions.

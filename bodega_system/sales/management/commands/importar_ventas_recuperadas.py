@@ -14,8 +14,8 @@
 # Flujo:
 #   1. En PythonAnywhere: python manage.py shell < scripts/export_ventas_recuperacion_10_11_julio.py
 #   2. Traer export_ventas_10_11_julio.json a este servidor
-#   3. Aquí, SIEMPRE primero en dry-run:
-#        python manage.py importar_ventas_recuperadas export_ventas_10_11_julio.json --dry-run
+#   3. Aquí, SIEMPRE primero sin --apply (dry-run es el default, no es un flag aparte):
+#        python manage.py importar_ventas_recuperadas export_ventas_10_11_julio.json
 #      Revisar los avisos, y solo entonces aplicar:
 #        python manage.py importar_ventas_recuperadas export_ventas_10_11_julio.json --apply
 #
