@@ -26,7 +26,11 @@ services:
       - db
     networks:
       - abastos_network
-    command: sh -c "python manage.py migrate --noinput && python manage.py collectstatic --noinput && gunicorn bodega_system.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120"
+    # --max-requests recicla cada worker tras N requests (con jitter para no
+    # reciclarlos todos a la vez) para que la memoria no crezca sin techo con
+    # el tiempo de vida del proceso. Ver docs/PENDIENTES.md — mitigación de
+    # RAM previa a la migración de droplet (2026-08-08).
+    command: sh -c "python manage.py migrate --noinput && python manage.py collectstatic --noinput && gunicorn bodega_system.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120 --max-requests 500 --max-requests-jitter 50"
 
   nginx:
     image: nginx:alpine
