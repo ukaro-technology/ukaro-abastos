@@ -1,0 +1,59 @@
+{% extends 'base/base.html' %}
+{% block title %}Aplicar Correcciones — Conteo #{{ count.pk }}{% endblock %}
+
+{% block content %}
+<div class="space-y-6 max-w-3xl mx-auto">
+    <div class="bg-white rounded-xl shadow-md p-5 sm:p-6 text-center">
+        <div class="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg class="w-8 h-8 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+            </svg>
+        </div>
+        <h1 class="text-xl font-bold text-gray-800 mb-2">¿Aplicar correcciones de stock?</h1>
+        <p class="text-gray-600">
+            Se van a crear {{ items_con_diferencia.count }} ajuste(s) de inventario para que el stock del
+            sistema coincida con lo contado físicamente en el Conteo #{{ count.pk }}.
+        </p>
+        <p class="text-sm text-gray-500 mt-2">
+            Esto SÍ modifica <code>Product.stock</code> — cada ajuste queda trazable en el historial
+            (motivo: "Corrección por auditoría de inventario #{{ count.pk }}"). No se puede aplicar dos
+            veces sobre el mismo conteo.
+        </p>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-md overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Producto</th>
+                        <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Diferencia a aplicar</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200">
+                    {% for item in items_con_diferencia %}
+                    <tr>
+                        <td class="px-4 py-2 text-sm text-gray-800">{{ item.product.name }}</td>
+                        <td class="px-4 py-2 text-sm text-right font-medium {% if item.difference < 0 %}text-red-600{% else %}text-green-600{% endif %}">
+                            {{ item.difference|stringformat:"+g" }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-md p-5 sm:p-6">
+        <form method="post" class="flex space-x-3 justify-center">
+            {% csrf_token %}
+            <a href="{% url 'inventory:inventory_count_detail' count.pk %}"
+               class="bg-gray-500 hover:bg-gray-600 text-white font-medium py-2 px-6 rounded-md">Cancelar</a>
+            <button type="submit"
+                    class="bg-yellow-600 hover:bg-yellow-700 text-white font-medium py-2 px-6 rounded-md">
+                Sí, aplicar correcciones
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}

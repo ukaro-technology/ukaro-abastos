@@ -43,12 +43,18 @@ compras recibidas) para poder explicar el número ante una auditoría.
 - Permisos: todo detrás de `admin_required` (es herramienta de auditoría, no de operación diaria).
 - Reusar `generate_pdf_response` de `finances/pdf_generators.py` para los PDFs nuevos — mismo look
   and feel que el resto de reportes del sistema.
+- **Aplicar correcciones de stock** (`inventory_count_apply_corrections`) — **revisión de decisión,
+  2026-08-08 más tarde el mismo día:** Simón cuestionó el valor real de mantenerlo "solo informativo"
+  dado que el proceso real ante una discrepancia es simplemente ajustar el sistema al conteo físico —
+  reingresar cada ajuste a mano, producto por producto, es fricción sin beneficio real en el caso común.
+  Se agregó un botón "Aplicar correcciones" (con pantalla de confirmación, mismo patrón que
+  `product_delete`) que genera los `InventoryAdjustment` de todos los productos con diferencia de una
+  vez. Detalle importante de diseño: aplica el **delta** (`difference`) sobre el stock *actual* del
+  producto en el momento de aplicar, NO lo fija al valor físico contado — así, si hubo ventas legítimas
+  entre el conteo y la aplicación de la corrección, esos movimientos no se pisan. `InventoryCount` tiene
+  `corrections_applied_at`/`corrections_applied_by` para evitar aplicar dos veces la misma corrección.
 
 ### Excluido (por ahora, explícitamente fuera de esta spec)
-- **Auto-ajustar el stock del sistema al valor físico contado** — decidido con Simón (2026-08-08):
-  el reporte de discrepancias queda **solo informativo**. Cualquier corrección de stock se hace a mano
-  desde la pantalla de ajustes que ya existe (`adjustment_list`/`adjustment_create`). Si en el futuro
-  se quiere automatizar, es una spec aparte.
 - Conteo físico de combos (`ProductCombo`) — el sistema no tiene combos cargados actualmente (0 en
   producción), no hay nada que auditar ahí todavía.
 - Cualquier tipo de conteo cíclico automático/programado, notificaciones, o app móvil para contar con
@@ -79,7 +85,8 @@ compras recibidas) para poder explicar el número ante una auditoría.
 - `admin_required`, no `sales_access_required`, en TODAS las vistas nuevas (crear conteo, ver
   discrepancias, listado, trazabilidad) — decidido con Simón (2026-08-08), mismo criterio que
   `adjustment_list`. No hay registro de conteo por no-admins en esta versión.
-- Reporte de discrepancias **solo informativo**, sin auto-ajuste de stock (ver Scope §2).
+- Reporte de discrepancias con botón opcional "Aplicar correcciones" (revisado 2026-08-08, ver Scope
+  §2) — aplica el delta sobre el stock actual, no fija al valor físico, requiere confirmación explícita.
 - Reusar `generate_pdf_response` en vez de un generador de PDF nuevo desde cero.
 - Combos quedan fuera del alcance (no hay datos que auditar).
 - `system_stock` se guarda como snapshot en `InventoryCountItem` al momento del conteo, no se

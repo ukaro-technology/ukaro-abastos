@@ -531,8 +531,9 @@ def inventory_count_create(request):
 
 @admin_required
 def inventory_count_detail(request, pk):
-    """Reporte de discrepancias de un conteo puntual — solo informativo,
-    no ajusta stock (ver docs/specs/auditoria-inventario.md, Scope)."""
+    """Reporte de discrepancias de un conteo puntual. No ajusta stock por sí
+    solo — para eso está inventory_count_apply_corrections, una acción
+    explícita aparte (ver docs/specs/auditoria-inventario.md)."""
     count = get_object_or_404(
         InventoryCount.objects.select_related('category', 'counted_by'),
         pk=pk
@@ -558,6 +559,69 @@ def inventory_count_detail(request, pk):
         'items_con_diferencia': items_con_diferencia,
         'totals': totals,
     })
+
+
+@admin_required
+def inventory_count_apply_corrections(request, pk):
+    """Genera los InventoryAdjustment que corrigen el stock del sistema
+    según las diferencias encontradas en un conteo — acción explícita,
+    separada del reporte (ver docs/specs/auditoria-inventario.md).
+
+    Aplica el DELTA (difference) sobre el stock ACTUAL del producto, no
+    lo "fija" al valor físico contado — así, si hubo ventas legítimas
+    entre el momento del conteo y el momento de aplicar la corrección,
+    esos movimientos no se pisan, solo se corrige el desfase real que
+    encontró la auditoría.
+
+    GET muestra la pantalla de confirmación (mismo patrón que
+    product_delete); POST aplica de verdad.
+    """
+    count = get_object_or_404(
+        InventoryCount.objects.select_related('category'), pk=pk
+    )
+
+    if request.method != 'POST':
+        items_con_diferencia = count.items.exclude(difference=0).select_related('product')
+        return render(request, 'inventory/inventory_count_apply_confirm.html', {
+            'count': count,
+            'items_con_diferencia': items_con_diferencia,
+        })
+
+    with transaction.atomic():
+        count_locked = InventoryCount.objects.select_for_update().get(pk=count.pk)
+        if count_locked.is_corrected:
+            messages.warning(request, 'Las correcciones de este conteo ya se habían aplicado antes — no se repitió.')
+            return redirect('inventory:inventory_count_detail', pk=count.pk)
+
+        items_con_diferencia = count_locked.items.exclude(difference=0).select_related('product')
+        if not items_con_diferencia.exists():
+            messages.info(request, 'Este conteo no tiene diferencias que corregir.')
+            return redirect('inventory:inventory_count_detail', pk=count.pk)
+
+        ajustes_creados = 0
+        for item in items_con_diferencia:
+            product = Product.objects.select_for_update().get(pk=item.product_id)
+            previous_stock = product.stock
+            new_stock = previous_stock + item.difference
+            InventoryAdjustment.objects.create(
+                product=product,
+                adjustment_type='add' if item.difference > 0 else 'remove',
+                quantity=abs(item.difference),
+                previous_stock=previous_stock,
+                new_stock=new_stock,
+                reason=f'Corrección por auditoría de inventario #{count.pk}',
+                adjusted_by=request.user,
+            )
+            product.stock = new_stock
+            product.save(update_fields=['stock'])
+            ajustes_creados += 1
+
+        count_locked.corrections_applied_at = timezone.now()
+        count_locked.corrections_applied_by = request.user
+        count_locked.save(update_fields=['corrections_applied_at', 'corrections_applied_by'])
+
+    messages.success(request, f'Se aplicaron {ajustes_creados} corrección(es) de stock.')
+    return redirect('inventory:inventory_count_detail', pk=count.pk)
 
 
 @admin_required

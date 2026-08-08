@@ -370,3 +370,91 @@ class ProductTraceabilityViewTest(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], 'application/pdf')
+
+
+# ─────────────────────────────────────────────
+# VISTAS: aplicar correcciones de stock
+# ─────────────────────────────────────────────
+
+class InventoryCountApplyCorrectionsViewTest(TestCase):
+
+    def setUp(self):
+        self.admin = make_admin('apply_admin')
+        make_exchange_rate(self.admin)
+        self.client.login(username='apply_admin', password='pass123')
+        self.cat = make_category('ApplyCat')
+        self.p1 = make_product(self.cat, barcode='APPLY001', stock=Decimal('10'))
+        self.p2 = make_product(self.cat, barcode='APPLY002', stock=Decimal('20'))
+        self.count = InventoryCount.objects.create(category=self.cat, counted_by=self.admin)
+        # p1: físico 7 (diferencia -3) | p2: físico 20 (sin diferencia)
+        InventoryCountItem.objects.create(count=self.count, product=self.p1,
+            system_stock=Decimal('10'), physical_stock=Decimal('7'))
+        InventoryCountItem.objects.create(count=self.count, product=self.p2,
+            system_stock=Decimal('20'), physical_stock=Decimal('20'))
+
+    def test_employee_blocked(self):
+        make_employee('apply_emp')
+        self.client.logout()
+        self.client.login(username='apply_emp', password='pass123')
+        response = self.client.get(reverse('inventory:inventory_count_apply_corrections', args=[self.count.pk]))
+        self.assertEqual(response.status_code, 403)
+
+    def test_get_shows_confirmation_with_only_differing_items(self):
+        response = self.client.get(reverse('inventory:inventory_count_apply_corrections', args=[self.count.pk]))
+        self.assertEqual(response.status_code, 200)
+        items = list(response.context['items_con_diferencia'])
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0].product, self.p1)
+
+    def test_post_applies_delta_to_current_stock(self):
+        self.client.post(reverse('inventory:inventory_count_apply_corrections', args=[self.count.pk]))
+        self.p1.refresh_from_db()
+        self.assertEqual(self.p1.stock, Decimal('7'))  # 10 + (-3) = 7
+
+    def test_post_creates_traceable_adjustment(self):
+        self.client.post(reverse('inventory:inventory_count_apply_corrections', args=[self.count.pk]))
+        adj = InventoryAdjustment.objects.filter(product=self.p1).latest('adjusted_at')
+        self.assertEqual(adj.adjustment_type, 'remove')
+        self.assertEqual(adj.quantity, Decimal('3'))
+        self.assertIn(f'#{self.count.pk}', adj.reason)
+        self.assertEqual(adj.adjusted_by, self.admin)
+
+    def test_post_only_creates_adjustment_for_items_with_difference(self):
+        self.client.post(reverse('inventory:inventory_count_apply_corrections', args=[self.count.pk]))
+        self.assertFalse(InventoryAdjustment.objects.filter(product=self.p2).exists())
+
+    def test_post_marks_count_as_corrected(self):
+        self.client.post(reverse('inventory:inventory_count_apply_corrections', args=[self.count.pk]))
+        self.count.refresh_from_db()
+        self.assertTrue(self.count.is_corrected)
+        self.assertEqual(self.count.corrections_applied_by, self.admin)
+
+    def test_delta_preserves_movements_after_the_count(self):
+        """Si el stock cambió DESPUÉS del conteo (ej. una venta), la corrección
+        debe aplicar el delta sobre el stock actual, no pisarlo con el físico."""
+        self.p1.stock = Decimal('8')  # bajó de 10 a 8 por una venta real después del conteo
+        self.p1.save()
+        self.client.post(reverse('inventory:inventory_count_apply_corrections', args=[self.count.pk]))
+        self.p1.refresh_from_db()
+        # 8 (stock actual) + (-3) (diferencia del conteo) = 5, NO se fija en 7 (el físico contado)
+        self.assertEqual(self.p1.stock, Decimal('5'))
+
+    def test_cannot_apply_twice(self):
+        self.client.post(reverse('inventory:inventory_count_apply_corrections', args=[self.count.pk]))
+        self.p1.refresh_from_db()
+        stock_despues_primera_vez = self.p1.stock
+        self.client.post(reverse('inventory:inventory_count_apply_corrections', args=[self.count.pk]))
+        self.p1.refresh_from_db()
+        self.assertEqual(self.p1.stock, stock_despues_primera_vez)  # no se aplicó de nuevo
+        self.assertEqual(InventoryAdjustment.objects.filter(product=self.p1).count(), 1)
+
+    def test_button_hidden_after_corrected(self):
+        detail_url = reverse('inventory:inventory_count_detail', args=[self.count.pk])
+        response = self.client.get(detail_url)
+        self.assertContains(response, 'Aplicar correcciones')
+
+        self.client.post(reverse('inventory:inventory_count_apply_corrections', args=[self.count.pk]))
+
+        response = self.client.get(detail_url)
+        self.assertNotContains(response, 'Aplicar correcciones')
+        self.assertContains(response, 'Correcciones aplicadas')

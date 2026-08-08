@@ -350,6 +350,18 @@ class InventoryCount(models.Model):
         verbose_name="Estado"
     )
     notes = models.TextField(blank=True, verbose_name="Notas")
+    corrections_applied_at = models.DateTimeField(
+        null=True, blank=True, verbose_name="Correcciones Aplicadas El",
+        help_text="Si tiene valor, ya se generaron los InventoryAdjustment de este conteo — no volver a aplicar"
+    )
+    corrections_applied_by = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='inventory_count_corrections',
+        verbose_name="Correcciones Aplicadas Por"
+    )
 
     class Meta:
         verbose_name = "Conteo de Inventario"
@@ -370,6 +382,10 @@ class InventoryCount(models.Model):
             (item.difference_value_usd for item in self.items_with_difference),
             Decimal('0.00')
         )
+
+    @property
+    def is_corrected(self):
+        return self.corrections_applied_at is not None
 
 
 class InventoryCountItem(models.Model):
