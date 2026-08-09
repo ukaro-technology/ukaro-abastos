@@ -28,6 +28,7 @@ urlpatterns = [
     # Auditoría de inventario — ver docs/specs/auditoria-inventario.md
     path('counts/', views.inventory_count_list, name='inventory_count_list'),
     path('counts/new/', views.inventory_count_create, name='inventory_count_create'),
+    path('counts/sheet/', views.inventory_count_sheet_pdf, name='inventory_count_sheet_pdf'),
     path('counts/<int:pk>/', views.inventory_count_detail, name='inventory_count_detail'),
     path('counts/<int:pk>/apply/', views.inventory_count_apply_corrections, name='inventory_count_apply_corrections'),
     path('products/<int:pk>/traceability/', views.product_traceability, name='product_traceability'),

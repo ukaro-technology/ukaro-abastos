@@ -17,7 +17,7 @@ from .models import (Category, Product, InventoryAdjustment, ProductCombo, Combo
 from .forms import (CategoryForm, ProductForm, InventoryAdjustmentForm,
                    ProductComboForm, ComboItemFormset)
 from .services import TraceabilityService
-from .pdf_generators import pdf_inventory_count_report, pdf_product_traceability
+from .pdf_generators import pdf_inventory_count_report, pdf_product_traceability, pdf_inventory_count_sheet
 from utils.decorators import admin_required, inventory_access_required
 
 # Vistas de Productos - Empleados y Administradores (Solo Lectura para Empleados)
@@ -527,6 +527,24 @@ def inventory_count_create(request):
         'category_id': category_id,
         'products': products,
     })
+
+
+@admin_required
+def inventory_count_sheet_pdf(request):
+    """Planilla PDF en blanco (cantidad del sistema + casilla de 'coincide' +
+    columna para el físico) para imprimir y llevar a la bodega — se cuenta a
+    mano y se transcribe después al formulario digital. No crea ningún
+    registro; es solo una plantilla de apoyo en papel.
+    """
+    category_id = request.GET.get('category')
+    category = None
+    products = Product.objects.filter(is_active=True)
+    if category_id and category_id != 'all':
+        category = get_object_or_404(Category, pk=category_id)
+        products = products.filter(category=category)
+    products = products.select_related('category').order_by('category__name', 'name')
+
+    return pdf_inventory_count_sheet(products, category)
 
 
 @admin_required

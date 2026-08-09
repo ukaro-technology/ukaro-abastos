@@ -50,6 +50,49 @@ def pdf_inventory_count_report(count, items_con_diferencia, totals):
     )
 
 
+def pdf_inventory_count_sheet(products, category):
+    """Planilla PDF EN BLANCO para llevar a la bodega y contar a mano.
+
+    Muestra la cantidad que dice el sistema y deja una casilla para marcar
+    si coincide ('☐ Coincide') más una columna en blanco para anotar el
+    conteo físico si no coincide — se llena con lápiz en la bodega y
+    después se transcribe al formulario digital (inventory_count_create).
+    No lee ni escribe InventoryCount — es solo una plantilla de apoyo en
+    papel, no un registro.
+    """
+    headers = ['Producto', 'Código', 'Cantidad Sistema', '☐ Coincide', 'Físico (si difiere)']
+
+    rows = []
+    for product in products:
+        rows.append([
+            product.name[:35],
+            product.barcode or '-',
+            str(product.stock),
+            '☐',
+            '______________',
+        ])
+
+    categoria = category.name if category else 'Todas las categorías'
+    metadata = [
+        ('Categoría', categoria),
+        ('Fecha de impresión', date.today().strftime('%d/%m/%Y')),
+    ]
+
+    summary = [
+        ('Productos en esta planilla', str(len(rows))),
+    ]
+
+    return generate_pdf_response(
+        title='Planilla de Conteo Físico — Ukaro Abastos',
+        headers=headers,
+        rows=rows,
+        summary=summary,
+        metadata=metadata,
+        landscape_mode=True,
+        filename=f'planilla_conteo_{category.pk if category else "todas"}_{date.today().strftime("%Y%m%d")}.pdf',
+    )
+
+
 def pdf_product_traceability(product, eventos, date_from, date_to):
     """PDF de la línea de tiempo de trazabilidad de un producto."""
     headers = ['Fecha', 'Tipo', 'Referencia', 'Detalle', 'Cambio', 'Stock resultante']
