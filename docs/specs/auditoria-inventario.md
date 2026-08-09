@@ -53,6 +53,18 @@ compras recibidas) para poder explicar el número ante una auditoría.
   producto en el momento de aplicar, NO lo fija al valor físico contado — así, si hubo ventas legítimas
   entre el conteo y la aplicación de la corrección, esos movimientos no se pisan. `InventoryCount` tiene
   `corrections_applied_at`/`corrections_applied_by` para evitar aplicar dos veces la misma corrección.
+- **Planilla PDF en blanco para imprimir** (`inventory_count_sheet_pdf`) — agregada 2026-08-08, a pedido
+  explícito de Simón ("¿y los reportes PDF? no hiciste lo fundamental"): el flujo original asumía que se
+  cuenta sentado frente a una pantalla tipeando; en la práctica el conteo real es caminando la bodega
+  con papel y lápiz (mismo patrón que otros sistemas Ukarasoft). PDF con: producto, código, cantidad del
+  sistema, casilla `[   ]` para tildar si coincide, columna en blanco para anotar el físico si no
+  coincide. No crea ningún registro — es solo una plantilla de apoyo, se cuenta en papel y DESPUÉS se
+  transcribe al formulario digital (`inventory_count_create`). Accesible desde el selector de categoría
+  y desde el formulario de conteo, botón "🖨️ Descargar Planilla para Imprimir". **Nota de bug real
+  encontrado en la verificación visual:** el glyph Unicode de checkbox (☐, U+2610) no lo soporta la
+  fuente Helvetica de reportlab — se dibujaba como cuadrado sólido (parece "ya marcado"), no como
+  casilla vacía. Se cambió a `[   ]` en ASCII simple tras confirmar el problema con captura real del
+  PDF (no solo con el content-type/status code).
 
 ### Excluido (por ahora, explícitamente fuera de esta spec)
 - Conteo físico de combos (`ProductCombo`) — el sistema no tiene combos cargados actualmente (0 en
