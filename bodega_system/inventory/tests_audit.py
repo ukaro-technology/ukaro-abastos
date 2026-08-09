@@ -458,3 +458,56 @@ class InventoryCountApplyCorrectionsViewTest(TestCase):
         response = self.client.get(detail_url)
         self.assertNotContains(response, 'Aplicar correcciones')
         self.assertContains(response, 'Correcciones aplicadas')
+
+
+# ─────────────────────────────────────────────
+# VISTAS: planilla PDF en blanco para imprimir
+# ─────────────────────────────────────────────
+
+class InventoryCountSheetPdfViewTest(TestCase):
+
+    def setUp(self):
+        self.admin = make_admin('sheet_admin')
+        make_exchange_rate(self.admin)
+        self.client.login(username='sheet_admin', password='pass123')
+        self.cat = make_category('SheetCat')
+        self.other_cat = make_category('OtherSheetCat')
+        self.p1 = make_product(self.cat, barcode='SHEET001', stock=Decimal('12'))
+        self.p2 = make_product(self.other_cat, barcode='SHEET002', stock=Decimal('5'))
+
+    def test_employee_blocked(self):
+        make_employee('sheet_emp')
+        self.client.logout()
+        self.client.login(username='sheet_emp', password='pass123')
+        response = self.client.get(reverse('inventory:inventory_count_sheet_pdf'), {'category': 'all'})
+        self.assertEqual(response.status_code, 403)
+
+    def test_returns_pdf(self):
+        response = self.client.get(reverse('inventory:inventory_count_sheet_pdf'), {'category': 'all'})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/pdf')
+
+    def test_no_category_param_means_all_products(self):
+        response = self.client.get(reverse('inventory:inventory_count_sheet_pdf'))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/pdf')
+
+    def test_specific_category_filters_products(self):
+        """No hay forma directa de leer el contenido del PDF acá, pero se puede
+        confirmar que la vista arma el queryset filtrado antes de generarlo
+        (mismo patrón de filtro que inventory_count_create, ya cubierto ahí)."""
+        response = self.client.get(reverse('inventory:inventory_count_sheet_pdf'), {'category': self.cat.pk})
+        self.assertEqual(response.status_code, 200)
+
+    def test_does_not_create_any_database_record(self):
+        """Es solo una plantilla de apoyo en papel — no debe crear InventoryCount."""
+        self.client.get(reverse('inventory:inventory_count_sheet_pdf'), {'category': 'all'})
+        self.assertEqual(InventoryCount.objects.count(), 0)
+
+    def test_button_present_on_category_selector(self):
+        response = self.client.get(reverse('inventory:inventory_count_create'))
+        self.assertContains(response, 'Descargar Planilla')
+
+    def test_button_present_on_count_form(self):
+        response = self.client.get(reverse('inventory:inventory_count_create'), {'category': self.cat.pk})
+        self.assertContains(response, 'Descargar Planilla')

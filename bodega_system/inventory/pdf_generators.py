@@ -60,7 +60,11 @@ def pdf_inventory_count_sheet(products, category):
     No lee ni escribe InventoryCount — es solo una plantilla de apoyo en
     papel, no un registro.
     """
-    headers = ['Producto', 'Código', 'Cantidad Sistema', '☐ Coincide', 'Físico (si difiere)']
+    # Nota: reportlab con la fuente Helvetica no soporta el glyph Unicode de
+    # checkbox (☐, U+2610) — lo dibuja como un cuadrado sólido, que en una
+    # planilla para tildar A MANO se confunde con "ya marcado". Se usa un
+    # corchete ASCII simple en su lugar, verificado visualmente.
+    headers = ['Producto', 'Código', 'Cantidad Sistema', 'Coincide', 'Físico (si difiere)']
 
     rows = []
     for product in products:
@@ -68,7 +72,7 @@ def pdf_inventory_count_sheet(products, category):
             product.name[:35],
             product.barcode or '-',
             str(product.stock),
-            '☐',
+            '[   ]',
             '______________',
         ])
 
