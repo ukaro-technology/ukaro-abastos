@@ -59,11 +59,12 @@
 - Deploy policy: DigitalOcean (cumplido)
 - Deploy manual via Docker (SSH + docker compose). Sin GitHub Actions.
 - SSL: Let's Encrypt (Certbot webroot), renovación por cron (host, 3am diario). Cert nuevo expira 2026-11-06.
-- **Migración de droplet $12→$6/mes COMPLETADA (2026-08-08).** Droplet nuevo:
-  `ubuntu-s-1vcpu-1gb-nyc3-01` (ID `590854857`, IP `157.245.211.83`, nyc3, 1GB/25GB, mismo VPC). Droplet viejo
-  `ubuntu-s-1vcpu-2gb-nyc3-01` (ID `562942552`, IP `161.35.142.183`) **sigue corriendo como rollback** — `db` y
-  `nginx` arriba, `web` detenido a propósito (evita escrituras divergentes; nginx ahí devuelve 502 a quien
-  todavía le resuelva la IP vieja). **No destruir hasta confirmar unos días de estabilidad real en el nuevo.**
+- **Migración de droplet $12→$6/mes COMPLETADA y CERRADA (2026-08-08, cierre 2026-08-11).** Droplet
+  activo: `ubuntu-s-1vcpu-1gb-nyc3-01` (ID `590854857`, IP `157.245.211.83`, nyc3, 1GB/25GB). Droplet
+  viejo (`562942552`) + snapshot huérfano + `bodega-backup` **destruidos el 2026-08-11**, tras 3 días de
+  monitoreo real sin un solo evento de OOM-killer (pico de RAM: 632MB/961MB = 66%, `abastos_web` estable
+  en ~206MB gracias al fix de `--max-requests`). Backup fresco (`pg_dump`) tomado y guardado localmente
+  justo antes de destruir, por las dudas. Factura de DO debería reflejar ~$6/mes desde ahora.
   - Causa raíz real (no la sospechada originalmente): el disco NUNCA fue el cuello de botella (DB 86MB, uso
     real 8.1G/48G tras limpieza en el viejo). El riesgo real era RAM: gunicorn sin `--max-requests` dejaba
     crecer los workers sin techo (27 días de uptime → 1.08GB solo el contenedor web, 84% de RAM total). Fix:
@@ -103,19 +104,6 @@
   hizo). Programar para un horario de bajo tráfico.
 
 ## Próximos pasos
-- [ ] **Recuperación de ventas 10-11 jul (ver decisión activa arriba)** — backup de la BD del droplet nuevo
-      → copiar JSON ya exportado → `importar_ventas_recuperadas ... --dry-run` → revisar avisos (14 créditos)
-      con Simón → `--apply` solo con su confirmación → verificar reportes/inventario/créditos después.
-- [ ] **Revisar `/root/ram_monitor/ram.log` del droplet NUEVO (157.245.211.83) en 24-48h** con tráfico real
-      de un día completo de ventas — confirmar que 1GB aguanta cómodo antes de destruir el droplet viejo.
-- [ ] **Destruir droplet viejo (`562942552`, 161.35.142.183) una vez confirmada la estabilidad** — decisión
-      2026-08-08: esperar 1 día completo de ventas reales, no más. **Importante:** un droplet *apagado* en DO
-      sigue facturando el 100% del precio (el disco/IP siguen reservados) — apagarlo NO ahorra nada, solo
-      destruirlo lo hace. Factura de DO baja a ~$6/mes recién después de destruir droplet viejo + ambos
-      snapshots (ver próximo punto).
-- [ ] Destruir snapshot huérfano `smartsolutions-1779244513767` (6.36GB, ~$0.40/mes) — confirmar con Simón si
-      el snapshot manual `bodega-backup` (2026-08-08) también se puede borrar una vez el droplet nuevo esté
-      confirmado, o si se quiere conservar como resguardo aparte.
 - [ ] Configurar rotación de logs del daemon de Docker en el droplet NUEVO (ver hallazgo arriba) — horario de
       bajo tráfico, reinicia los 3 contenedores a la vez.
 - [ ] Rotación + copia externa de los backups JSON manuales (`/app/backups` en el contenedor web).
