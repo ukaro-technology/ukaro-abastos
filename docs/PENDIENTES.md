@@ -131,5 +131,5 @@
 - [x] 2 bugs resueltos ✅ (2026-04-16)
 
 ## Última sesión
-2026-08-08: [snapshot automático — 1 commit(s)]
-- 2903f4b fix: reciclar workers de gunicorn con --max-requests para evitar crecimiento de RAM sin techo
+2026-08-11: [snapshot automático — 1 commit(s)]
+- f12e106 docs: cerrar migración de droplet — droplet viejo y snapshots destruidos
