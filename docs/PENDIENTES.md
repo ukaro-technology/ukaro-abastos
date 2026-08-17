@@ -17,6 +17,25 @@
     del fix — no era flakiness. Solución: ruta literal `/static/js/calculator.js` en vez de
     `{% static %}`, consistente con que ningún otro template del proyecto usa ese tag. **435 tests,
     mismas 9 failures + 6 errors preexistentes (no relacionadas), 0 regresiones.**
+  - **Bug real en producción tras el primer deploy (Simón lo reportó con captura — panel abierto
+    solo, clics sin efecto):** el primer deploy pasó los 435 tests de Django pero **nunca se probó con
+    un navegador real** — los tests de Django no ejecutan Alpine.js. Diagnosticado con la extensión de
+    Chrome contra el sitio en vivo (consola: `Alpine Expression Error: ukaroCalculator is not
+    defined`), reproducido también con Node+jsdom para descartar teorías antes de tocar código.
+    **Causa raíz real:** `calculator.js` se cargaba DESPUÉS del script de Alpine en `base.html` — con
+    `defer`, Alpine llama `Alpine.start()` (que dispara `alpine:init`) en cuanto termina de cargar,
+    así que el `addEventListener('alpine:init', ...)` de `calculator.js` se registraba demasiado
+    tarde y nunca se enteraba. Fix: invertir el orden de los `<script defer>` (el que registra
+    `Alpine.data()` siempre va ANTES que el script de Alpine). **De paso, dos bugs más encontrados
+    arreglando esto:** (1) `LANGUAGE_CODE=es-ve` renderiza decimales con coma (`777,50`), rompiendo
+    la llamada JS `ukaroCalculator(777,50)` que Alpine interpreta como dos argumentos — resuelto con
+    `{% load l10n %}` + `{% localize off %}`; (2) mientras documentaba el fix anterior, un comentario
+    Django `{# ... #}` de varias líneas se filtró como texto plano en la página — **`{# #}` no
+    soporta multilínea en Django** (limitación real del motor, no un typo), hay que usar
+    `{% comment %}...{% endcomment %}` para comentarios largos. Los 3 fixes verificados con clics
+    reales en el navegador (Chrome, extensión conectada) contra el server local antes de re-desplegar
+    — no solo contra tests de servidor. **Lección para la próxima vez con features de JS/Alpine:
+    probar con navegador real ANTES de dar por buena una feature, los tests de Django no alcanzan.**
   - **Spec para diseño (NO implementado todavía):** `docs/specs/precios-estables-bs.md` — permitir
     fijar manualmente el precio de venta en Bs de un producto para que no se recalcule con la tasa
     BCV. Hallazgo clave documentado en la spec: el sistema hoy es 100% USD-céntrico, el precio Bs se

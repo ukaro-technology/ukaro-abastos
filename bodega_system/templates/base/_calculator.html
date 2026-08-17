@@ -1,4 +1,12 @@
 {# templates/base/_calculator.html - Calculadora integrada del navbar #}
+{% load l10n %}
+{% comment %}
+El bloque localize off de abajo es obligatorio: con LANGUAGE_CODE=es-ve, la
+interpolación normal renderiza el decimal con coma ("777,50" en vez de
+"777.50"), lo que rompe la llamada JS de más abajo — Alpine la interpretaría
+como dos argumentos en vez de un solo Float.
+{% endcomment %}
+{% localize off %}
 <div x-data="ukaroCalculator({{ latest_exchange_rate.bs_to_usd|default_if_none:'null' }})"
     @keydown.escape.window="open = false" class="relative">
     <button @click="toggle()" type="button"
@@ -109,3 +117,4 @@
         </div>
     </div>
 </div>
+{% endlocalize %}

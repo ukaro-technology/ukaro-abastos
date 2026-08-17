@@ -16,8 +16,12 @@
     <script src="https://cdn.tailwindcss.com"></script>
 
     <!-- Alpine.js -->
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <!-- calculator.js registra Alpine.data() en el evento 'alpine:init', así que
+         DEBE cargar antes que el script de Alpine: Alpine dispara ese evento en
+         cuanto arranca (Alpine.start(), inmediato con defer), y si el listener
+         se registra después, ya se lo perdió. -->
     <script defer src="/static/js/calculator.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 
     <!-- HTMX -->
     <script src="https://unpkg.com/htmx.org@1.9.2"></script>
