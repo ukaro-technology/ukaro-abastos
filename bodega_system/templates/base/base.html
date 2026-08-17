@@ -17,6 +17,7 @@
 
     <!-- Alpine.js -->
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script defer src="/static/js/calculator.js"></script>
 
     <!-- HTMX -->
     <script src="https://unpkg.com/htmx.org@1.9.2"></script>
@@ -118,6 +119,11 @@
             background-color: #34d399;
             color: #065f46;
         }
+
+        /* Teclas de la calculadora del navbar */
+        .calc-key {
+            @apply py-2.5 rounded-md font-medium text-lg transition-colors;
+        }
     </style>
 
     {% block extra_head %}{% endblock %}
@@ -172,6 +178,9 @@
                 <!-- Menú de usuario optimizado -->
                 {% if user.is_authenticated %}
                 <div class="flex items-center space-x-2">
+                    <!-- Calculadora -->
+                    {% include 'base/_calculator.html' %}
+
                     <!-- Nombre de usuario - Solo en tablet+ -->
                     <span class="text-sm hidden md:inline-block truncate max-w-32 lg:max-w-none">
                         {{ user.get_full_name|default:user.username }}
