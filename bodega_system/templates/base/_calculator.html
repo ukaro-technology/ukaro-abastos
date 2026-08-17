@@ -1,0 +1,111 @@
+{# templates/base/_calculator.html - Calculadora integrada del navbar #}
+<div x-data="ukaroCalculator({{ latest_exchange_rate.bs_to_usd|default_if_none:'null' }})"
+    @keydown.escape.window="open = false" class="relative">
+    <button @click="toggle()" type="button"
+        class="btn-touch text-white hover:text-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-300 rounded-full"
+        :aria-expanded="open.toString()" aria-label="Abrir calculadora">
+        <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd"
+                d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V4a2 2 0 00-2-2H6zm1 2h6v3H7V4zm0 5h1v1H7V9zm0 2h1v1H7v-1zm0 2h1v1H7v-1zm2-4h1v1H9V9zm0 2h1v1H9v-1zm0 2h1v1H9v-1zm2-4h1v1h-1V9zm0 2h1v1h-1v-1zm0 2h3v3h-3v-3z"
+                clip-rule="evenodd" />
+        </svg>
+    </button>
+
+    <div x-show="open" @click.away="open = false" x-cloak x-transition:enter="transition ease-out duration-150"
+        x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
+        x-transition:leave="transition ease-in duration-100" x-transition:leave-start="opacity-100 scale-100"
+        x-transition:leave-end="opacity-0 scale-95"
+        class="fixed sm:absolute inset-x-2 top-16 sm:inset-x-auto sm:top-auto sm:right-0 sm:mt-2 w-auto sm:w-80 bg-white rounded-lg shadow-xl z-50 border border-gray-200 text-gray-900 overflow-hidden">
+
+        <!-- Pestañas -->
+        <div class="flex border-b border-gray-200 bg-gray-50">
+            <button type="button" @click="tab = 'calc'" class="flex-1 py-2 text-sm font-medium transition-colors"
+                :class="tab === 'calc' ? 'text-blue-600 border-b-2 border-blue-600 bg-white' : 'text-gray-500 hover:text-gray-700'">
+                Calculadora
+            </button>
+            <button type="button" @click="tab = 'usd'" class="flex-1 py-2 text-sm font-medium transition-colors"
+                :class="tab === 'usd' ? 'text-blue-600 border-b-2 border-blue-600 bg-white' : 'text-gray-500 hover:text-gray-700'">
+                USD físico → BCV
+            </button>
+        </div>
+
+        <!-- Calculadora básica -->
+        <div x-show="tab === 'calc'" class="p-3">
+            <div class="bg-gray-900 text-white text-right rounded-md px-3 py-3 mb-3 text-2xl font-mono truncate"
+                x-text="display"></div>
+            <div class="grid grid-cols-4 gap-2">
+                <button type="button" @click="clear()" class="calc-key bg-red-100 text-red-700 hover:bg-red-200">AC</button>
+                <button type="button" @click="toggleSign()" class="calc-key bg-gray-100 hover:bg-gray-200">±</button>
+                <button type="button" @click="percent()" class="calc-key bg-gray-100 hover:bg-gray-200">%</button>
+                <button type="button" @click="chooseOperator('÷')"
+                    class="calc-key bg-blue-100 text-blue-700 hover:bg-blue-200">÷</button>
+
+                <button type="button" @click="inputDigit('7')" class="calc-key bg-gray-50 hover:bg-gray-100">7</button>
+                <button type="button" @click="inputDigit('8')" class="calc-key bg-gray-50 hover:bg-gray-100">8</button>
+                <button type="button" @click="inputDigit('9')" class="calc-key bg-gray-50 hover:bg-gray-100">9</button>
+                <button type="button" @click="chooseOperator('×')"
+                    class="calc-key bg-blue-100 text-blue-700 hover:bg-blue-200">×</button>
+
+                <button type="button" @click="inputDigit('4')" class="calc-key bg-gray-50 hover:bg-gray-100">4</button>
+                <button type="button" @click="inputDigit('5')" class="calc-key bg-gray-50 hover:bg-gray-100">5</button>
+                <button type="button" @click="inputDigit('6')" class="calc-key bg-gray-50 hover:bg-gray-100">6</button>
+                <button type="button" @click="chooseOperator('-')"
+                    class="calc-key bg-blue-100 text-blue-700 hover:bg-blue-200">−</button>
+
+                <button type="button" @click="inputDigit('1')" class="calc-key bg-gray-50 hover:bg-gray-100">1</button>
+                <button type="button" @click="inputDigit('2')" class="calc-key bg-gray-50 hover:bg-gray-100">2</button>
+                <button type="button" @click="inputDigit('3')" class="calc-key bg-gray-50 hover:bg-gray-100">3</button>
+                <button type="button" @click="chooseOperator('+')"
+                    class="calc-key bg-blue-100 text-blue-700 hover:bg-blue-200">+</button>
+
+                <button type="button" @click="inputDigit('0')"
+                    class="calc-key bg-gray-50 hover:bg-gray-100 col-span-2">0</button>
+                <button type="button" @click="inputDecimal()" class="calc-key bg-gray-50 hover:bg-gray-100">.</button>
+                <button type="button" @click="equals()" class="calc-key bg-blue-600 text-white hover:bg-blue-700">=</button>
+            </div>
+            <button type="button" @click="backspace()"
+                class="mt-2 w-full text-xs text-gray-500 hover:text-gray-700 py-1">
+                ⌫ Borrar último dígito
+            </button>
+        </div>
+
+        <!-- Conversor USD físico -> BCV -->
+        <div x-show="tab === 'usd'" class="p-4 space-y-3 text-sm">
+            <p class="text-xs text-gray-500 leading-snug">
+                El dólar físico (efectivo, "valor calle") suele valer más que la tasa BCV.
+                Ej: 10$ físico ≈ 11.20$ BCV → factor 1.12. Ajusta el factor según el precio del día.
+            </p>
+
+            <div>
+                <label class="block text-xs font-medium text-gray-700 mb-1">Monto en USD físico</label>
+                <input type="number" step="0.01" min="0" inputmode="decimal" x-model="montoFisico"
+                    class="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm focus:ring-2 focus:ring-blue-300 focus:outline-none"
+                    placeholder="10.00">
+            </div>
+
+            <div>
+                <label class="block text-xs font-medium text-gray-700 mb-1">Factor / prima calle</label>
+                <input type="number" step="0.01" min="0" inputmode="decimal" x-model="factor"
+                    class="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm focus:ring-2 focus:ring-blue-300 focus:outline-none"
+                    placeholder="1.12">
+            </div>
+
+            <div>
+                <label class="block text-xs font-medium text-gray-700 mb-1">Tasa BCV (Bs/USD)</label>
+                <input type="number" step="0.0001" min="0" inputmode="decimal" x-model="tasaBcv"
+                    class="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm focus:ring-2 focus:ring-blue-300 focus:outline-none">
+            </div>
+
+            <div class="border-t border-gray-200 pt-3 space-y-1">
+                <div class="flex justify-between">
+                    <span class="text-gray-500">Equivalente USD BCV:</span>
+                    <span class="font-semibold" x-text="'$ ' + formatoUsd(equivalenteBcv)"></span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-500">Total en Bs:</span>
+                    <span class="font-semibold text-blue-700" x-text="'Bs ' + formatoBs(montoBs)"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
