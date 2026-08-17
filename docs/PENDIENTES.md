@@ -1,6 +1,31 @@
 # Pendientes — Ukaro Abastos
 
 ## Decisiones activas
+- **COMPLETADO (2026-08-17) — Calculadora integrada en el navbar + spec de "Precios Estables en Bs".**
+  - **Calculadora:** botón en el header (visible para todo usuario autenticado, todas las vistas),
+    panel con dos pestañas — calculadora básica de 4 operaciones, y conversor "USD físico → BCV"
+    (monto en efectivo × factor de prima calle editable, ej. 10$ físico ≈ 11.20$ BCV → factor 1.12,
+    más tasa BCV precargada desde `ExchangeRate`). El factor de prima **no se guarda en el servidor**
+    — vive en `localStorage` del navegador, decisión explícita de Simón de empezar simple sin tocar
+    backend. Archivos: `templates/base/_calculator.html`, `static/js/calculator.js` (Alpine.data
+    component), `templates/base/base.html`.
+  - **Bug encontrado y corregido en el camino:** usar `{% static %}` en `base.html` rompió ~168 tests
+    (`ValueError: Missing staticfiles manifest entry`) — es el **primer uso de `{% static %}` en todo
+    el proyecto**, y este entorno nunca corrió `collectstatic` (no existe `bodega_system/staticfiles/`),
+    así que `CompressedManifestStaticFilesStorage` (WhiteNoise) revienta con manifest vacío en modo
+    estricto. Confirmado corriendo el suite completo con y sin el cambio (`git stash`) antes y después
+    del fix — no era flakiness. Solución: ruta literal `/static/js/calculator.js` en vez de
+    `{% static %}`, consistente con que ningún otro template del proyecto usa ese tag. **435 tests,
+    mismas 9 failures + 6 errors preexistentes (no relacionadas), 0 regresiones.**
+  - **Spec para diseño (NO implementado todavía):** `docs/specs/precios-estables-bs.md` — permitir
+    fijar manualmente el precio de venta en Bs de un producto para que no se recalcule con la tasa
+    BCV. Hallazgo clave documentado en la spec: el sistema hoy es 100% USD-céntrico, el precio Bs se
+    calcula al vuelo en cada request (`Product.get_current_price_bs()`), las columnas
+    `selling_price_bs`/`purchase_price_bs` en la BD están vestigiales (nadie las mantiene
+    sincronizadas en producción), y de paso se encontró un bug preexistente en el reporte de
+    valorización de inventario que las lee directo. 4 preguntas abiertas en la spec (sección 7)
+    pendientes de que Simón decida antes de implementar.
+  - **Pendiente, no bloqueante:** decisiones de la spec (sección 7), luego implementar.
 - **COMPLETADO (2026-08-08) — Auditoría de inventario (conteo físico vs sistema + trazabilidad por
   producto).** Spec en `docs/specs/auditoria-inventario.md` (aprobada por Simón, implementada, 29 tests
   nuevos en verde, verificado con datos reales de producción). Motivado por la necesidad de cuadrar los
