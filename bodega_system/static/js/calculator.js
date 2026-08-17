@@ -2,12 +2,12 @@
  * Calculadora integrada del navbar (Ukaro Abastos)
  *
  * Componente Alpine.js con dos pestañas:
- *   - "calc": calculadora básica de 4 operaciones
- *   - "usd":  conversor de USD físico (efectivo/calle) a USD BCV y Bs
+ *   - "calc": calculadora básica de 4 operaciones (mouse o teclado)
+ *   - "usd":  conversor de USD físico (efectivo/calle) a Bs y a USD BCV
  *
- * El factor de prima calle (cuánto vale 1 USD físico en USD BCV) NO se
- * guarda en el servidor: es un ajuste manual del día a día que cada
- * usuario define y que se recuerda solo en su navegador (localStorage).
+ * La tasa calle (cuánto vale hoy 1 USD físico en Bs) NO se guarda en el
+ * servidor: es un ajuste manual del día a día que cada usuario define y que
+ * se recuerda solo en su navegador (localStorage).
  */
 document.addEventListener('alpine:init', () => {
     Alpine.data('ukaroCalculator', (bcvRate) => ({
@@ -21,20 +21,81 @@ document.addEventListener('alpine:init', () => {
         firstOperand: null,
         waitingForSecondOperand: false,
 
-        // --- Conversor USD físico -> BCV ---
+        // --- Conversor USD físico -> Bs / USD BCV ---
         montoFisico: '',
-        factor: '',
+        tasaCalle: '',
         tasaBcv: '',
 
         init() {
             this.tasaBcv = bcvRate !== null && bcvRate !== undefined ? String(bcvRate) : '';
-            const factorGuardado = localStorage.getItem('ukaro_abastos_calc_factor');
-            this.factor = factorGuardado || '';
-            this.$watch('factor', (valor) => {
+
+            const tasaCalleGuardada = localStorage.getItem('ukaro_abastos_calc_tasa_calle');
+            this.tasaCalle = tasaCalleGuardada || '';
+            this.$watch('tasaCalle', (valor) => {
                 if (valor) {
-                    localStorage.setItem('ukaro_abastos_calc_factor', valor);
+                    localStorage.setItem('ukaro_abastos_calc_tasa_calle', valor);
                 }
             });
+
+            // Atajos de teclado: solo activos con el panel abierto y en la
+            // pestaña de calculadora básica (la pestaña USD ya se maneja
+            // sola, son inputs normales). Se ignora si el foco está en un
+            // campo de texto de OTRA parte de la página (para no robarle
+            // las teclas a un formulario de venta abierto detrás).
+            this._onKeydown = (event) => {
+                if (!this.open || this.tab !== 'calc') return;
+                const tag = (event.target.tagName || '').toLowerCase();
+                if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+
+                if (event.key >= '0' && event.key <= '9') {
+                    this.inputDigit(event.key);
+                    event.preventDefault();
+                    return;
+                }
+                switch (event.key) {
+                    case '.':
+                    case ',':
+                        this.inputDecimal();
+                        event.preventDefault();
+                        break;
+                    case '+':
+                        this.chooseOperator('+');
+                        event.preventDefault();
+                        break;
+                    case '-':
+                        this.chooseOperator('-');
+                        event.preventDefault();
+                        break;
+                    case '*':
+                        this.chooseOperator('×');
+                        event.preventDefault();
+                        break;
+                    case '/':
+                        this.chooseOperator('÷');
+                        event.preventDefault();
+                        break;
+                    case '%':
+                        this.percent();
+                        event.preventDefault();
+                        break;
+                    case 'Enter':
+                    case '=':
+                        this.equals();
+                        event.preventDefault();
+                        break;
+                    case 'Backspace':
+                        this.backspace();
+                        event.preventDefault();
+                        break;
+                }
+                // Nota: Escape ya cierra el panel entero (ver @keydown.escape.window
+                // en _calculator.html) — no se duplica acá para no pisarlo.
+            };
+            window.addEventListener('keydown', this._onKeydown);
+        },
+
+        destroy() {
+            window.removeEventListener('keydown', this._onKeydown);
         },
 
         toggle() {
@@ -133,18 +194,20 @@ document.addEventListener('alpine:init', () => {
             this.waitingForSecondOperand = false;
         },
 
-        // ---------- Conversor USD físico -> BCV ----------
-        get equivalenteBcv() {
+        // ---------- Conversor USD físico -> Bs / USD BCV ----------
+        // El usuario ingresa directamente cuántos Bs vale hoy 1 USD físico
+        // (tasa calle) — ya no se calcula a partir de un factor de prima.
+        get montoBs() {
             const monto = parseFloat(this.montoFisico);
-            const factor = parseFloat(this.factor);
-            if (isNaN(monto) || isNaN(factor)) return null;
-            return monto * factor;
+            const tasaCalle = parseFloat(this.tasaCalle);
+            if (isNaN(monto) || isNaN(tasaCalle)) return null;
+            return monto * tasaCalle;
         },
 
-        get montoBs() {
+        get equivalenteBcv() {
             const tasa = parseFloat(this.tasaBcv);
-            if (this.equivalenteBcv === null || isNaN(tasa)) return null;
-            return this.equivalenteBcv * tasa;
+            if (this.montoBs === null || isNaN(tasa) || tasa === 0) return null;
+            return this.montoBs / tasa;
         },
 
         formatoUsd(valor) {

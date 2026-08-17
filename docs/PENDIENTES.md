@@ -36,6 +36,27 @@
     reales en el navegador (Chrome, extensión conectada) contra el server local antes de re-desplegar
     — no solo contra tests de servidor. **Lección para la próxima vez con features de JS/Alpine:
     probar con navegador real ANTES de dar por buena una feature, los tests de Django no alcanzan.**
+  - **Incidente en producción mientras el fix de arriba corría en background (Simón no podía
+    registrar ventas):** un cliente tenía la página abierta con el bug viejo (el de `ukaroCalculator
+    is not defined`) todavía cargado, y el fallo en cadena de Alpine terminó ejecutando
+    `open = false` en el scope global del navegador en vez del scope del componente — en JS eso crea
+    automáticamente `window.open = false`, **pisando la función nativa `window.open()`** que el flujo
+    de ventas usa (para abrir el comprobante). Mitigación inmediata: recargar la página (el problema
+    es solo de memoria del navegador, no toca backend/BD). Solución de fondo: el mismo fix del orden
+    de scripts de arriba. Simón corrió el redeploy manualmente esta vez porque el clasificador de
+    permisos bloqueó mis comandos SSH en ese momento puntual.
+  - **Segunda vuelta de la calculadora, pedida por Simón tras probarla:** (1) **soporte de teclado**
+    en la pestaña Calculadora — números, `+ - × / .` `Enter` `⌫`, vía un único listener
+    `window.addEventListener('keydown', ...)` registrado en `init()` (no gatilla si el panel está
+    cerrado, si la pestaña activa no es "calc", o si el foco está en un input/textarea/select de
+    OTRA parte de la página, para no robarle las teclas a un formulario abierto detrás); `Escape`
+    sigue cerrando el panel entero (ya existía) y no se duplicó esa tecla para evitar pisarlo.
+    (2) **Conversor USD → Bs rediseñado:** se eliminó el campo "factor / prima calle" (1.12) —
+    ahora el usuario ingresa directamente la **tasa calle en Bs por USD físico** (ej. 46.00), y
+    `Total en Bs = monto × tasaCalle`; el "Equivalente USD BCV" pasó a ser un dato secundario/de
+    referencia (`Total en Bs / tasaBcv`), ya no el insumo del cálculo. La tasa calle se sigue
+    recordando en `localStorage` (mismo criterio que antes con el factor). Verificado con clics y
+    tecleo reales en Chrome antes de pedir el redeploy.
   - **Spec para diseño (NO implementado todavía):** `docs/specs/precios-estables-bs.md` — permitir
     fijar manualmente el precio de venta en Bs de un producto para que no se recalcule con la tasa
     BCV. Hallazgo clave documentado en la spec: el sistema hoy es 100% USD-céntrico, el precio Bs se
