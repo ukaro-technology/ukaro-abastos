@@ -20,7 +20,14 @@
          DEBE cargar antes que el script de Alpine: Alpine dispara ese evento en
          cuanto arranca (Alpine.start(), inmediato con defer), y si el listener
          se registra después, ya se lo perdió. -->
-    <script defer src="/static/js/calculator.js"></script>
+    <!-- ⚠️ El nginx de producción cachea /static/ con Cache-Control: immutable,
+         max-age=2592000 (30 días) — como no usamos el tag static de Django con
+         manifest (ver docs/PENDIENTES.md), el navegador NUNCA vuelve a pedir
+         este archivo mientras la URL no cambie, aunque el servidor tenga una
+         versión nueva. Por eso el "?v=N": SIEMPRE subir este número al editar
+         calculator.js, o el cambio no le va a llegar a nadie que ya haya
+         abierto la calculadora antes. -->
+    <script defer src="/static/js/calculator.js?v=2"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 
     <!-- HTMX -->
