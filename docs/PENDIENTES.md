@@ -57,6 +57,22 @@
     referencia (`Total en Bs / tasaBcv`), ya no el insumo del cálculo. La tasa calle se sigue
     recordando en `localStorage` (mismo criterio que antes con el factor). Verificado con clics y
     tecleo reales en Chrome antes de pedir el redeploy.
+  - **Tercer bug de la misma tanda (Simón: "sigo sin poder usar el teclado" después del redeploy de
+    arriba):** no era el código — el `nginx` de producción sirve `/static/` con
+    `Cache-Control: public, immutable, max-age=2592000` (30 días, confirmado con `curl -I`). Como
+    `calculator.js` se referencia con una ruta literal fija (ver el bug de `{% static %}`/manifest más
+    arriba en este mismo punto), el navegador de Simón lo había cacheado en su primera visita y con
+    `immutable` **nunca vuelve a pedirlo al servidor**, sin importar cuántas veces se redeploye. Fix:
+    cache-buster manual en la URL (`calculator.js?v=2` en `base.html`, con un comentario bien visible
+    de "subir este número al editar el archivo o el cambio no le llega a nadie que ya lo haya
+    cargado"). **De paso, tercera vez en el día que reincido en el mismo error:** escribí
+    `{% static %}` como texto dentro de un comentario **HTML** (`<!-- ... {% static %} ... -->`)
+    pensando que HTML comment protegía el texto — Django tokeniza `{% %}` en TODO el archivo, HTML
+    comments no lo blindan (solo `{# #}` o `{% comment %}` lo hacen). Verificado esta vez con
+    `Alpine.$data()` real contra la página en vivo en producción (no un screenshot — la herramienta de
+    captura de la extensión de Chrome se colgó ese día — sino leyendo el estado reactivo real del
+    componente tras simular el tecleo `1,2,+,8,Enter` con `KeyboardEvent` de verdad: `display` pasó de
+    `"0"` a `"20"`).
   - **Spec para diseño (NO implementado todavía):** `docs/specs/precios-estables-bs.md` — permitir
     fijar manualmente el precio de venta en Bs de un producto para que no se recalcule con la tasa
     BCV. Hallazgo clave documentado en la spec: el sistema hoy es 100% USD-céntrico, el precio Bs se
