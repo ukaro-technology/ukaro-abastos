@@ -9,7 +9,7 @@ Instrucciones para Claude Code al trabajar en este proyecto.
 Sistema de gestión de inventario, ventas, proveedores, clientes y finanzas.
 
 ## Estado
-**En producción** — IP: 161.35.142.183 (DigitalOcean)
+**En producción** — IP: 157.245.211.83 (DigitalOcean) — corregido 2026-08-29, IP vieja (161.35.142.183) fue destruida el 2026-08-11 al migrar de droplet
 42 tests pasando. 2 bugs resueltos 2026-04-16.
 Deploy pendiente: no hay git en el working copy del servidor.
 
@@ -151,7 +151,7 @@ python manage.py test
 ## Deploy (Docker)
 
 ```bash
-# En el servidor (161.35.142.183)
+# En el servidor (157.245.211.83)
 docker compose up -d --build
 # Nginx en puerto 80, Gunicorn en 8000 (interno)
 ```
@@ -161,7 +161,7 @@ docker compose up -d --build
 ```
 SECRET_KEY=<clave segura>
 DEBUG=False
-ALLOWED_HOSTS=161.35.142.183,localhost
+ALLOWED_HOSTS=157.245.211.83,localhost
 DB_NAME=abastos_db
 DB_USER=abastos_user
 DB_PASSWORD=<contraseña segura>
