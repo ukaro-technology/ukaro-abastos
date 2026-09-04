@@ -36,10 +36,10 @@ def make_admin(username='sale_admin'):
 def make_employee(username='sale_emp'):
     return User.objects.create_user(username=username, password='pass123', is_employee=True)
 
-def make_exchange_rate(user, rate='45.50'):
+def make_exchange_rate(user, rate='45.50', days_offset=0):
     cache.clear()
     return ExchangeRate.objects.create(
-        date=timezone.now().date(),
+        date=timezone.now().date() + timedelta(days=days_offset),
         bs_to_usd=Decimal(rate),
         updated_by=user
     )

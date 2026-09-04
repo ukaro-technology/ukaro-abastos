@@ -1,9 +1,9 @@
 # Spec: Precios Estables en Bs
 
 **Proyecto:** ukaro-abastos
-**Fecha:** 2026-08-17
+**Fecha:** 2026-08-17 (decisiones cerradas, aprobada e implementada: 2026-09-04)
 **Autor:** Claude Code (supervisado por Simón)
-**Estado:** borrador — pendiente de decisiones abiertas (sección 7) y aprobación de Simón
+**Estado:** implementada — ver sección 7 (decisiones cerradas) y sección 9 (notas de implementación)
 
 ## 1. Outcome (Resultado esperado)
 
@@ -118,48 +118,92 @@ de un precio USD que siempre lo es. El punto correcto para centralizar esa decis
 - No se toca el flujo de créditos de clientes: ya está desacoplado de la tasa del día por diseño
   previo (snapshot al momento de la venta).
 
-## 6. Tasks (implementación — a ejecutar solo después de aprobación)
+## 6. Tasks (implementación)
 
-1. [ ] Migración: agregar `Product.pricing_mode` (`CharField`, choices `usd`/`bs_fixed`, default `usd`).
-2. [ ] `Product.get_current_price_bs()`: branch por `pricing_mode`.
-3. [ ] `Product.get_current_purchase_price_bs()`: revisar si necesita el mismo tratamiento o se deja
-   siempre en modo `usd` (según decisión 7.2).
-4. [ ] `ProductService.bulk_update_prices` / `update_product_prices`: excluir `bs_fixed`.
-5. [ ] `sales/api_views.py:process_regular_sale`: reemplazar cálculo manual por
-   `product.get_current_price_bs()`.
-6. [ ] `inventory/api_views.py`: usar `get_current_price_bs()` en el cálculo de `profit_margin`.
-7. [ ] `ProductForm`: campo condicional de precio Bs + toggle de modo (probablemente con Alpine.js
-   para mostrar/ocultar en el mismo form, sin JS inline — ver skill `form-design`/`alpine-components`).
-8. [ ] Templates: `product_form.html`, `product_list.html`, `product_detail.html` — toggle y badge
-   visual.
-9. [ ] Decidir y, si aplica, corregir el bug preexistente de `inventory/api_views.py:310` (sección 7.3).
-10. [ ] Tests nuevos (modelo, servicio, API de venta, formulario).
+1. [x] Migración: agregar `Product.pricing_mode` (`CharField`, choices `usd`/`bs_fixed`, default `usd`).
+2. [x] `Product.get_current_price_bs()`: branch por `pricing_mode`. De paso se agregó
+   `Product.get_current_price_usd()` (equivalente informativo en modo `bs_fixed`) y ambos métodos
+   ganaron parámetros `quantity` y `exchange_rate` opcionales — necesarios para no romper precio al
+   mayor (no contemplado en el diseño original, ver sección 9.1) y para no repetir la consulta de
+   tasa ítem por ítem en una venta.
+3. [x] `Product.get_current_purchase_price_bs()`: sin cambios — siempre modo `usd` (decisión 7.2).
+4. [x] `ProductService.bulk_update_prices` / `update_product_prices`: excluyen el precio de VENTA de
+   productos `bs_fixed`; el de COMPRA se sigue sincronizando siempre, para todos los productos.
+5. [x] `sales/api_views.py`: reemplazado el cálculo manual duplicado tanto en `process_regular_sale`
+   como en el loop de pre-cálculo de totales de `create_sale_api` (esta segunda duplicación no estaba
+   listada explícitamente en esta spec, pero es el mismo patrón — ver sección 9.2).
+6. [x] `inventory/api_views.py`: `profit_margin`/`profit_percentage` en `product_detail_api` ahora usan
+   `get_current_price_bs()`/`get_current_purchase_price_bs()`.
+7. [x] `ProductForm`: `pricing_mode` (select) + `selling_price_bs` condicional, con Alpine.js
+   (`x-show`, sin JS inline) en `product_form.html`.
+8. [x] Templates: `product_form.html` (toggle + campo Bs + equivalente informativo + margen
+   recalculado), `product_list.html` y `product_detail.html` (badge "Bs fijo").
+9. [x] Bug preexistente de `inventory/api_views.py:310` corregido (decisión 7.3) — el reporte de
+   valorización (`product_stock_summary_api`) ahora calcula en vivo con la tasa actual vía
+   `Case`/`When` sobre `pricing_mode`, en vez de leer las columnas vestigiales.
+10. [x] Tests nuevos: modelo (`ProductPricingModeTest`), formulario (`ProductFormPricingModeTest`),
+    API de venta (`SaleCreateAPIBsFixedTest`), servicio (exclusión bs_fixed en
+    `ProductServiceUpdatePricesTest`), reporte de valorización (`ProductStockSummaryValorizationTest`).
 11. [ ] Actualizar `docs/PENDIENTES.md` al cerrar.
 
-## 7. Preguntas abiertas (decidir antes de implementar)
+## 7. Decisiones (cerradas por Simón el 2026-09-04)
 
-1. **Nivel del toggle:** ¿por producto individual (recomendado, ya asumido en la sección 5) o también
-   se necesita una acción masiva ("aplicar Bs fijo a toda una categoría de un tirón")? Si Leida
-   piensa fijar precios de decenas de productos a la vez, vale la pena una acción bulk desde
-   `product_list.html` en vez de entrar producto por producto.
-2. **Alcance de "congelar":** ¿confirmar que solo el precio de **venta** se congela y el de **compra**
-   siempre sigue en USD/tasa? Así lo asume la sección 5, pero es la decisión de negocio más importante
-   de esta spec — vale confirmarla explícitamente.
-3. **Bug preexistente de valorización de inventario** (sección 2): ¿se corrige en el mismo trabajo
-   (sincronizar `selling_price_bs` también para productos en modo `usd`, para que el reporte de
-   valorización sea preciso en ambos modos) o se deja anotado en `docs/PENDIENTES.md` como deuda
-   aparte, para no mezclar un fix de un bug viejo con una feature nueva?
-4. **Aviso de precio desactualizado:** cuando la tasa BCV suba/baje mucho desde la última vez que se
-   fijó un precio Bs estable, ¿el sistema debe mostrar algún aviso visual ("este precio no se toca
-   hace X días / la tasa se movió Y%") para que Leida no se le olvide revisarlo? Se puede agregar
-   después sin romper nada si se prefiere empezar simple.
+1. **Nivel del toggle: solo por producto individual.** Sin acción masiva por ahora — se puede agregar
+   después sobre el mismo campo si Leida lo necesita.
+2. **Alcance de "congelar": confirmado — solo el precio de VENTA se congela.** El precio de compra a
+   proveedores siempre sigue en USD × tasa actual, sin importar el modo del producto. Verificado en
+   `ProductService.update_product_prices`/`bulk_update_prices` y en `ProductForm.clean()`.
+3. **Bug de valorización de inventario: corregido en el mismo trabajo.** `product_stock_summary_api`
+   ya no lee `purchase_price_bs`/`selling_price_bs` (vestigiales) — calcula en vivo con la tasa actual
+   y respeta el precio fijo de los productos `bs_fixed`.
+4. **Aviso de precio desactualizado: no implementado — se empezó simple.** Puede agregarse después
+   sin romper nada si Leida lo pide tras usar la feature.
 
-## 8. Verification (cómo verificar antes de dar por cerrada la spec)
+## 8. Verification
 
-- [ ] Tests pasan (`python manage.py test`).
-- [ ] Prueba manual: crear un producto en modo `bs_fixed`, vender una unidad, confirmar que
-  `SaleItem.price_bs` coincide exactamente con el precio fijado (no con USD × tasa del día).
-- [ ] Prueba manual: cambiar la tasa BCV y confirmar que el precio del producto `bs_fixed` no se
-  mueve, mientras que un producto en modo `usd` sí refleja la tasa nueva.
+- [x] Tests pasan (`python manage.py test inventory sales`) — las únicas fallas del suite son 6
+  preexistentes, no relacionadas (verificado corriendo el mismo test contra el commit previo a esta
+  sesión, `git worktree` en `f0f909a`: fallan exactamente igual sin ninguno de estos cambios).
+- [ ] Prueba manual pendiente: crear un producto en modo `bs_fixed` desde la UI real, vender una
+  unidad, confirmar que `SaleItem.price_bs` coincide exactamente con el precio fijado.
+- [ ] Prueba manual pendiente: cambiar la tasa BCV y confirmar visualmente que el precio del producto
+  `bs_fixed` no se mueve, mientras que uno en modo `usd` sí refleja la tasa nueva.
 - [ ] Review de Simón (y de Leida, si hace falta validar el flujo desde el punto de vista de uso
   diario en caja).
+
+## 9. Notas de implementación (hallazgos durante el desarrollo, no cambian el diseño aprobado)
+
+1. **Precio al mayor (`is_bulk_pricing`) no estaba contemplado en el diseño original** (secciones 1-7
+   no lo mencionan) y resultó ser una feature real y activa en `sales/api_views.py` y
+   `product_form.html` — no un campo vestigial. Reemplazar ingenuamente el cálculo por
+   `product.get_current_price_bs()` sin parámetros habría roto el precio al mayor para TODO producto
+   en modo `usd` (regresión real, no cosmética). Se resolvió dándole a `get_current_price_bs()`/
+   `get_current_price_usd()` un parámetro `quantity` opcional que preserva el comportamiento actual en
+   modo `usd`, y se decidió (no estaba en la spec original) que el modo `bs_fixed` **no tiene
+   equivalente de precio al mayor** — `ProductForm.clean()` rechaza activar ambos a la vez, y la UI
+   deshabilita el checkbox de precio al mayor cuando el modo es Bs fijo.
+2. **Segunda duplicación del cálculo de precio, no listada en la spec original:** además de
+   `process_regular_sale` (sí mencionado en la tarea 5 original), `create_sale_api` tiene un loop de
+   pre-cálculo de totales (`total_usd`/`total_bs` de la venta) que repetía la misma fórmula manual por
+   separado. Si solo se corregía `process_regular_sale`, el total de la venta y el precio real de cada
+   ítem habrían quedado inconsistentes para productos `bs_fixed`. Se corrigieron ambos con la misma
+   fuente de verdad.
+3. **`utils/api_views.py:product_by_barcode`** (el endpoint real que usa el punto de venta al escanear
+   un código de barras, `templates/sales/sale_form.html`) tenía la misma fórmula duplicada — no
+   mencionado en la spec original porque no se había rastreado hasta ahí. Corregido para no mostrarle
+   al cajero un precio incorrecto de un producto `bs_fixed` al escanearlo.
+4. **Bug real preexistente, no relacionado, corregido de paso** (autorizado explícitamente por Simón
+   antes de tocarlo): el conversor USD→Bs de `product_form.html` (el mismo bloque editado para el
+   toggle) inyectaba `{{ latest_exchange_rate.bs_to_usd }}` sin `|unlocalize` dentro de una expresión
+   JS — con `LANGUAGE_CODE=es-ve` esto renderiza con coma decimal (`40,00`), y `purchasePrice * 40,00`
+   en JS es el operador coma (evalúa `purchasePrice * 40`, lo descarta, y el resultado real es `40.00`
+   fijo vía `.toFixed(2)` sobre `50`... en la práctica: el preview de conversión siempre mostraba
+   "Bs 0.00"). Mismo patrón de bug ya documentado en el histórico de la calculadora del navbar
+   (ver `docs/PENDIENTES.md`, punto de la calculadora, 2026-08-17).
+5. **Hallazgo sin corregir, anotado en `docs/PENDIENTES.md` como deuda aparte:** en
+   `inventory/api_views.py:product_by_barcode_api`, el bloque `bulk_pricing` lee
+   `product.bulk_price_bs`, un atributo que **no existe** en el modelo `Product` (solo existe
+   `bulk_price_usd`) — cualquier producto con `is_bulk_pricing=True` que se escanee por esta ruta
+   específica (`inventory:product_by_barcode_api`, distinta de la que usa el punto de venta) dispara
+   un `AttributeError` no controlado. No se tocó por estar fuera del alcance de esta spec (estructura
+   de datos de precio al mayor, no de precios en Bs), pero queda documentado para no perderlo.
