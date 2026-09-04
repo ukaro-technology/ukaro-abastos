@@ -73,15 +73,44 @@
     captura de la extensión de Chrome se colgó ese día — sino leyendo el estado reactivo real del
     componente tras simular el tecleo `1,2,+,8,Enter` con `KeyboardEvent` de verdad: `display` pasó de
     `"0"` a `"20"`).
-  - **Spec para diseño (NO implementado todavía):** `docs/specs/precios-estables-bs.md` — permitir
-    fijar manualmente el precio de venta en Bs de un producto para que no se recalcule con la tasa
-    BCV. Hallazgo clave documentado en la spec: el sistema hoy es 100% USD-céntrico, el precio Bs se
-    calcula al vuelo en cada request (`Product.get_current_price_bs()`), las columnas
-    `selling_price_bs`/`purchase_price_bs` en la BD están vestigiales (nadie las mantiene
-    sincronizadas en producción), y de paso se encontró un bug preexistente en el reporte de
-    valorización de inventario que las lee directo. 4 preguntas abiertas en la spec (sección 7)
-    pendientes de que Simón decida antes de implementar.
-  - **Pendiente, no bloqueante:** decisiones de la spec (sección 7), luego implementar.
+- **COMPLETADO (2026-09-04) — Precios Estables en Bs, implementado.** Spec en
+  `docs/specs/precios-estables-bs.md` (4 decisiones cerradas por Simón, implementada, 26 tests
+  nuevos en verde, 0 regresiones — suite completa comparada test por test contra el commit previo a
+  la sesión vía `git worktree`, mismas 9 failures + 6 errors preexistentes en ambos lados, ninguno
+  nuevo).
+  - `Product.pricing_mode` (`usd` default | `bs_fixed`), por producto (no hay acción masiva ni modo
+    global — decisión explícita de Simón, se puede agregar después). Toggle en
+    `product_form.html`; en modo `bs_fixed` el campo mandante pasa a ser `selling_price_bs` (editable)
+    y `selling_price_usd` queda como referencia informativa de solo lectura (Bs fijo / tasa actual).
+  - Precio de compra a proveedores **nunca se congela**, sin importar el modo (decisión explícita de
+    Simón) — `ProductService.update_product_prices`/`bulk_update_prices` siguen sincronizando
+    `purchase_price_bs` siempre, solo excluyen `selling_price_bs` de productos `bs_fixed`.
+  - `Product.get_current_price_bs()`/`get_current_price_usd()` centralizan toda la lógica de precio
+    de venta (punto de venta, reportes, detalle) — ganaron parámetros `quantity` y `exchange_rate`
+    opcionales, necesarios para no romper **precio al mayor** (`is_bulk_pricing`), una feature real y
+    activa que el diseño original de la spec no había contemplado. Se decidió (no estaba en la spec
+    original) que precio al mayor y Bs fijo son mutuamente excluyentes — activar ambos a la vez da
+    error de validación.
+  - Bug preexistente del reporte de valorización de inventario (`inventory/api_views.py`,
+    `product_stock_summary_api`) corregido en el mismo trabajo, a pedido explícito de Simón: ya no lee
+    las columnas `purchase_price_bs`/`selling_price_bs` (vestigiales), calcula en vivo con la tasa
+    actual respetando el modo de cada producto.
+  - **De rebote, corregidos 2 bugs reales más** (mismo patrón ya documentado arriba con la
+    calculadora): (1) `sales/api_views.py` y `utils/api_views.py:product_by_barcode` (el endpoint
+    real que usa el punto de venta al escanear) tenían la misma fórmula de precio duplicada — de no
+    corregirse, un producto `bs_fixed` habría mostrado precio incorrecto al cajero o un total de venta
+    inconsistente con el precio real del ítem. (2) el conversor USD→Bs de `product_form.html`
+    inyectaba la tasa sin `|unlocalize` en una expresión JS — con `LANGUAGE_CODE=es-ve` (coma decimal)
+    el operador coma de JS hacía que el preview de conversión SIEMPRE mostrara "Bs 0.00" — autorizado
+    por Simón antes de tocarlo, corregido en las 3 líneas afectadas del mismo bloque.
+  - **Hallazgo sin corregir, anotado como deuda aparte** (fuera de alcance de esta spec):
+    `inventory/api_views.py:product_by_barcode_api` lee `product.bulk_price_bs`, un atributo que no
+    existe en el modelo (`Product` solo tiene `bulk_price_usd`) — cualquier producto con precio al
+    mayor activo que se escanee por esa ruta específica (`inventory:product_by_barcode_api`, distinta
+    de la que usa el punto de venta real) dispara un `AttributeError` 500 no controlado.
+  - **Pendiente, no bloqueante:** prueba manual en navegador real (crear producto `bs_fixed`, vender,
+    cambiar tasa BCV, confirmar visualmente) — todavía no hecha, solo verificado con tests de Django.
+    Deploy a producción pendiente de que Simón revise el resultado.
 - **COMPLETADO (2026-08-08) — Auditoría de inventario (conteo físico vs sistema + trazabilidad por
   producto).** Spec en `docs/specs/auditoria-inventario.md` (aprobada por Simón, implementada, 29 tests
   nuevos en verde, verificado con datos reales de producción). Motivado por la necesidad de cuadrar los
