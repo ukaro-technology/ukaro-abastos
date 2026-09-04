@@ -416,6 +416,86 @@ class SaleCreateAPITest(TestCase):
 
 
 # ─────────────────────────────────────────────
+# SALE CREATE API — PRECIO ESTABLE EN BS (spec: precios-estables-bs)
+# ─────────────────────────────────────────────
+
+class SaleCreateAPIBsFixedTest(TestCase):
+    """Verifica que vender un producto en modo 'bs_fixed' respeta el precio fijo — y que el
+    total de la venta (calculado antes de crear los ítems) coincide exactamente con el precio
+    de cada SaleItem (ambos deben usar la misma fuente: Product.get_current_price_bs)."""
+
+    def setUp(self):
+        cache.clear()
+        self.client = Client()
+        self.admin = make_admin('bsfixed_sale_admin')
+        make_exchange_rate(self.admin, rate='40.00')
+        self.cat = make_category('BsFixed Sale Cat')
+        self.product = make_product(self.cat, barcode='BSFIXED001', stock=50, selling_usd='8.00')
+        self.product.pricing_mode = Product.PRICING_MODE_BS_FIXED
+        self.product.selling_price_bs = Decimal('500.00')
+        self.product.save()
+        self.url = reverse('sales:create_sale_api')
+
+    def _post_sale(self, data, user='bsfixed_sale_admin'):
+        self.client.login(username=user, password='pass123')
+        return self.client.post(
+            self.url,
+            json.dumps(data),
+            content_type='application/json'
+        )
+
+    def test_sale_uses_fixed_bs_price_not_usd_times_rate(self):
+        """El precio Bs del ítem debe ser el fijo (500.00 × 2), no USD × tasa"""
+        data = {
+            'items': [{'product_id': self.product.pk, 'quantity': 2}],
+            'payment_method': 'cash',
+            'is_credit': False
+        }
+        response = self._post_sale(data)
+        self.assertIn(response.status_code, [200, 201])
+        response_data = json.loads(response.content)
+
+        sale = Sale.objects.get(pk=response_data['id'])
+        item = sale.items.first()
+        self.assertEqual(item.price_bs, Decimal('500.00'))
+        # Total de la venta (calculado en el loop de pre-cálculo) debe coincidir con el total
+        # real de los ítems (calculado en process_regular_sale) — misma fuente de verdad.
+        self.assertEqual(sale.total_bs, item.price_bs * 2)
+
+    def test_sale_price_survives_rate_change(self):
+        """Cambiar la tasa BCV no debe afectar el precio de venta del producto bs_fixed"""
+        make_exchange_rate(self.admin, rate='999.00', days_offset=1)
+        data = {
+            'items': [{'product_id': self.product.pk, 'quantity': 1}],
+            'payment_method': 'cash',
+            'is_credit': False
+        }
+        response = self._post_sale(data)
+        response_data = json.loads(response.content)
+        sale = Sale.objects.get(pk=response_data['id'])
+        self.assertEqual(sale.items.first().price_bs, Decimal('500.00'))
+
+    def test_usd_mode_product_unaffected_in_same_sale(self):
+        """Un producto en modo usd, vendido junto a uno bs_fixed, sigue calculando con la tasa"""
+        usd_product = make_product(
+            self.cat, barcode='USDNORMAL001', stock=50, selling_usd='8.00'
+        )
+        data = {
+            'items': [
+                {'product_id': self.product.pk, 'quantity': 1},
+                {'product_id': usd_product.pk, 'quantity': 1},
+            ],
+            'payment_method': 'cash',
+            'is_credit': False
+        }
+        response = self._post_sale(data)
+        response_data = json.loads(response.content)
+        sale = Sale.objects.get(pk=response_data['id'])
+        prices_bs = sorted(item.price_bs for item in sale.items.all())
+        self.assertEqual(prices_bs, sorted([Decimal('500.00'), Decimal('8.00') * Decimal('40.00')]))
+
+
+# ─────────────────────────────────────────────
 # SALE DETAIL VIEW TESTS
 # ─────────────────────────────────────────────
 

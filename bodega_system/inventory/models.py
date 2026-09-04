@@ -31,6 +31,14 @@ class Product(models.Model):
         ('ml', 'Mililitro'),
     )
 
+    # Modo de precio de venta (spec: docs/specs/precios-estables-bs.md)
+    PRICING_MODE_USD = 'usd'
+    PRICING_MODE_BS_FIXED = 'bs_fixed'
+    PRICING_MODE_CHOICES = (
+        (PRICING_MODE_USD, 'USD (precio en Bs se calcula con la tasa BCV)'),
+        (PRICING_MODE_BS_FIXED, 'Precio estable en Bs (no se recalcula con la tasa)'),
+    )
+
     name = models.CharField(max_length=200, verbose_name="Nombre")
     barcode = models.CharField(
         max_length=50,
@@ -81,6 +89,17 @@ class Product(models.Model):
         default=0,
         verbose_name="Precio de Venta (Bs)",
         help_text="Se actualiza automáticamente con la tasa de cambio"
+    )
+
+    # Precio estable en Bs (spec: docs/specs/precios-estables-bs.md)
+    pricing_mode = models.CharField(
+        max_length=10,
+        choices=PRICING_MODE_CHOICES,
+        default=PRICING_MODE_USD,
+        verbose_name="Modo de precio",
+        help_text="'usd': el precio en Bs se recalcula con la tasa BCV en cada venta (comportamiento "
+                   "por defecto). 'bs_fixed': selling_price_bs es la fuente de verdad, no se toca al "
+                   "cambiar la tasa. Solo aplica al precio de VENTA — el de compra siempre sigue en USD."
     )
 
     # Inventario
@@ -186,14 +205,59 @@ class Product(models.Model):
         price_usd = self.get_price_usd_for_quantity(quantity)
         return price_usd * exchange_rate
 
-    def get_current_price_bs(self):
-        """Obtiene precio actual en Bs usando la tasa de cambio más reciente"""
-        from utils.models import ExchangeRate
+    def get_current_price_usd(self, quantity=None, exchange_rate=None):
+        """
+        Obtiene el precio de venta actual en USD.
 
-        latest_rate = ExchangeRate.get_latest_rate()
-        if latest_rate:
-            return self.selling_price_usd * latest_rate.bs_to_usd
-        return Decimal('0.00')
+        - Modo 'usd' (default): el precio en USD manda — considera precio al mayor si se
+          pasa `quantity` (ver `get_price_usd_for_quantity`).
+        - Modo 'bs_fixed': el precio en USD es solo informativo (no dirige la venta), se
+          calcula al vuelo dividiendo el precio fijo en Bs entre la tasa BCV actual. No
+          considera precio al mayor — el modo Bs fijo no tiene un equivalente de precio al
+          mayor propio.
+
+        `exchange_rate` (instancia de `ExchangeRate` o None): si se pasa, se usa esa tasa en
+        vez de consultar `ExchangeRate.get_latest_rate()` — para no repetir la consulta ítem
+        por ítem cuando quien llama (ej. `create_sale_api`) ya la trae de una transacción.
+        """
+        if self.pricing_mode == self.PRICING_MODE_BS_FIXED:
+            if exchange_rate is None:
+                from utils.models import ExchangeRate
+
+                exchange_rate = ExchangeRate.get_latest_rate()
+            if exchange_rate and exchange_rate.bs_to_usd:
+                return self.selling_price_bs / exchange_rate.bs_to_usd
+            return Decimal('0.00')
+
+        if quantity is not None:
+            return self.get_price_usd_for_quantity(quantity)
+        return self.selling_price_usd
+
+    def get_current_price_bs(self, quantity=None, exchange_rate=None):
+        """
+        Obtiene el precio de venta actual en Bs — fuente única de verdad para todo el
+        sistema (punto de venta, reportes, detalle de producto).
+
+        - Modo 'usd' (default): `selling_price_usd` (o el precio al mayor, si `quantity`
+          alcanza `bulk_min_quantity`) × tasa BCV actual. Comportamiento sin cambios.
+        - Modo 'bs_fixed': devuelve `selling_price_bs` tal cual, sin tocar la tasa ni la
+          cantidad — es un precio fijo por decisión explícita del administrador.
+
+        `exchange_rate`: ver `get_current_price_usd` — misma idea, evita re-consultar la
+        tasa más reciente si quien llama ya la tiene.
+        """
+        if self.pricing_mode == self.PRICING_MODE_BS_FIXED:
+            return self.selling_price_bs
+
+        if exchange_rate is None:
+            from utils.models import ExchangeRate
+
+            exchange_rate = ExchangeRate.get_latest_rate()
+        if not exchange_rate:
+            return Decimal('0.00')
+
+        price_usd = self.get_price_usd_for_quantity(quantity) if quantity is not None else self.selling_price_usd
+        return price_usd * exchange_rate.bs_to_usd
 
     def get_current_purchase_price_bs(self):
         """Obtiene precio de compra actual en Bs"""

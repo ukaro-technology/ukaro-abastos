@@ -54,11 +54,11 @@ def create_sale_api(request):
                 else:
                     product = get_object_or_404(Product, pk=item_data['product_id'])
                     quantity = Decimal(str(item_data['quantity']))
-                    
-                    # ⭐ CALCULAR PRECIO USD Y BS
-                    price_usd = product.get_price_usd_for_quantity(quantity)
-                    price_bs = price_usd * current_exchange_rate.bs_to_usd
-                    
+
+                    # ⭐ CALCULAR PRECIO USD Y BS (respeta precio al mayor y precio estable en Bs)
+                    price_usd = product.get_current_price_usd(quantity, exchange_rate=current_exchange_rate)
+                    price_bs = product.get_current_price_bs(quantity, exchange_rate=current_exchange_rate)
+
                     item_total_usd = price_usd * quantity
                     item_total_bs = price_bs * quantity
                     
@@ -160,9 +160,9 @@ def process_regular_sale(sale, item_data, user, exchange_rate):
                         f'Requerido: {quantity} {product.unit_display}'
             }
         
-        # ⭐ CALCULAR PRECIOS USD Y BS
-        price_usd = product.get_price_usd_for_quantity(quantity)
-        price_bs = price_usd * exchange_rate.bs_to_usd
+        # ⭐ CALCULAR PRECIOS USD Y BS (respeta precio al mayor y precio estable en Bs)
+        price_usd = product.get_current_price_usd(quantity, exchange_rate=exchange_rate)
+        price_bs = product.get_current_price_bs(quantity, exchange_rate=exchange_rate)
         
         # ⭐ CREAR ÍTEM CON AMBOS PRECIOS
         sale_item = SaleItem.objects.create(

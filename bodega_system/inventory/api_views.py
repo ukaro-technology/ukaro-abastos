@@ -51,11 +51,15 @@ def product_detail_api(request, pk):
             'stock_status': product.stock_status,
             'stock_level': 'low' if product.stock <= product.min_stock else 'normal',
             
-            # Información de márgenes
-            'profit_margin': float(product.selling_price_bs - product.purchase_price_bs),
+            # Información de márgenes (usa el precio Bs real de venta, ya sea calculado con
+            # la tasa o fijo — ver Product.get_current_price_bs)
+            'profit_margin': float(product.get_current_price_bs() - product.get_current_purchase_price_bs()),
             'profit_percentage': round(
-                ((product.selling_price_bs - product.purchase_price_bs) / product.purchase_price_bs * 100), 2
-            ) if product.purchase_price_bs > 0 else 0,
+                (
+                    (product.get_current_price_bs() - product.get_current_purchase_price_bs())
+                    / product.get_current_purchase_price_bs() * 100
+                ), 2
+            ) if product.get_current_purchase_price_bs() > 0 else 0,
             
             # Historial reciente
             'recent_adjustments': [
@@ -205,11 +209,12 @@ def product_by_barcode_api(request, barcode):
             'stock_available': stock_available,
             'image': product.image.url if product.image else None,
             
-            # Precios completos para órdenes de compra
+            # Precios completos para órdenes de compra (selling_price_usd es informativo en
+            # modo 'bs_fixed' — ver Product.get_current_price_usd)
             'purchase_price_bs': float(product.get_current_purchase_price_bs()),
             'purchase_price_usd': float(product.purchase_price_usd),
             'selling_price_bs': float(product.get_current_price_bs()),
-            'selling_price_usd': float(product.selling_price_usd),
+            'selling_price_usd': float(product.get_current_price_usd()),
             
             # Información para precios al mayor
             'bulk_pricing': {
@@ -293,23 +298,43 @@ def validate_barcode_api(request):
 def product_stock_summary_api(request):
     """API para obtener resumen de stock del inventario"""
     try:
-        from django.db.models import Count, Sum, F
-        
+        from decimal import Decimal
+        from django.db.models import Count, Sum, F, Case, When, Value, DecimalField
+        from utils.models import ExchangeRate
+
         # Estadísticas generales
         total_products = Product.objects.filter(is_active=True).count()
         out_of_stock = Product.objects.filter(is_active=True, stock=0).count()
         low_stock = Product.objects.filter(
-            is_active=True, 
-            stock__gt=0, 
+            is_active=True,
+            stock__gt=0,
             stock__lte=F('min_stock')
         ).count()
-        
-        # Valor total del inventario
+
+        # Valor total del inventario — calculado en vivo con la tasa BCV actual, NO leyendo
+        # las columnas purchase_price_bs/selling_price_bs (vestigiales, solo se escriben una
+        # vez al crear el producto — ver docs/specs/precios-estables-bs.md sección 2 y 7.3).
+        # El precio de compra siempre sigue la tasa actual; el de venta respeta el precio
+        # estable en Bs de los productos en modo 'bs_fixed'.
+        latest_rate = ExchangeRate.get_latest_rate()
+        rate = latest_rate.bs_to_usd if latest_rate else Decimal('0')
+        money_field = DecimalField(max_digits=20, decimal_places=5)
+
         total_value = Product.objects.filter(is_active=True).aggregate(
-            purchase_value=Sum(F('stock') * F('purchase_price_bs')),
-            selling_value=Sum(F('stock') * F('selling_price_bs'))
+            purchase_value=Sum(
+                F('stock') * F('purchase_price_usd') * Value(rate, output_field=money_field),
+                output_field=money_field,
+            ),
+            selling_value=Sum(
+                F('stock') * Case(
+                    When(pricing_mode=Product.PRICING_MODE_BS_FIXED, then=F('selling_price_bs')),
+                    default=F('selling_price_usd') * Value(rate, output_field=money_field),
+                    output_field=money_field,
+                ),
+                output_field=money_field,
+            ),
         )
-        
+
         return JsonResponse({
             'summary': {
                 'total_products': total_products,

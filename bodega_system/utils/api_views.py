@@ -33,24 +33,22 @@ def product_by_barcode(request, barcode):
         from inventory.models import Product
         
         product = get_object_or_404(Product, barcode=barcode, is_active=True)
-        
+
         # ⭐ OBTENER TASA DE CAMBIO ACTUAL
         latest_rate = ExchangeRate.get_latest_rate()
-        
-        # ⭐ CALCULAR PRECIOS EN BS AUTOMÁTICAMENTE
-        selling_price_bs = 0
-        if latest_rate:
-            selling_price_bs = float(product.selling_price_usd * latest_rate.bs_to_usd)
-        
+
+        # ⭐ CALCULAR PRECIOS EN BS (respeta precio estable en Bs — ver Product.get_current_price_bs)
+        selling_price_bs = float(product.get_current_price_bs(exchange_rate=latest_rate))
+
         return JsonResponse({
             'id': product.id,
             'name': product.name,
             'barcode': product.barcode,
             'category_id': product.category_id,
             'category_name': product.category.name,
-            # ⭐ PRECIO USD (para admin)
-            'selling_price_usd': float(product.selling_price_usd),
-            # ⭐ PRECIO BS CALCULADO (para ventas)
+            # ⭐ PRECIO USD (informativo — en modo 'bs_fixed' es solo referencia, no dirige la venta)
+            'selling_price_usd': float(product.get_current_price_usd(exchange_rate=latest_rate)),
+            # ⭐ PRECIO BS (fuente de verdad para la venta)
             'selling_price_bs': selling_price_bs,
             'stock': float(product.stock),
             'unit_type': product.unit_display,

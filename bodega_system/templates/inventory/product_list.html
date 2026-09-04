@@ -152,7 +152,12 @@
                     $ {{ product.purchase_price_usd|floatformat:2 }}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">
-                    $ {{ product.selling_price_usd|floatformat:2 }}
+                    $ {{ product.get_current_price_usd|floatformat:2 }}
+                    {% if product.pricing_mode == 'bs_fixed' %}
+                        <span class="ml-1 px-1.5 py-0.5 inline-flex text-xs font-semibold rounded bg-blue-100 text-blue-800" title="Precio de venta fijo en Bs, no se recalcula con la tasa">
+                            Bs fijo
+                        </span>
+                    {% endif %}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-right">
                     {% if product.stock <= 0 %}
@@ -256,7 +261,14 @@
             </div>
             <div>
                 <span class="text-xs font-medium text-gray-500">Precio Venta:</span>
-                <p class="text-sm font-bold text-gray-900">$ {{ product.selling_price_usd|floatformat:2 }}</p>
+                <p class="text-sm font-bold text-gray-900">
+                    $ {{ product.get_current_price_usd|floatformat:2 }}
+                    {% if product.pricing_mode == 'bs_fixed' %}
+                        <span class="px-1.5 py-0.5 inline-flex text-xs font-semibold rounded bg-blue-100 text-blue-800" title="Precio de venta fijo en Bs, no se recalcula con la tasa">
+                            Bs fijo
+                        </span>
+                    {% endif %}
+                </p>
             </div>
             <div>
                 <span class="text-xs font-medium text-gray-500">Stock Actual:</span>

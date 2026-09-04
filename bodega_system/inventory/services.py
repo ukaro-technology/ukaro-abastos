@@ -283,11 +283,16 @@ class ProductService:
             exchange_rate: ExchangeRate a usar (default: tasa actual)
 
         Returns:
-            Product: Producto actualizado
+            Product: Producto actualizado. Si está en modo 'bs_fixed', el precio de VENTA
+                no se toca (es fijo por decisión del admin) — pero el de COMPRA sigue
+                sincronizándose con la tasa como siempre, porque congelar solo aplica a
+                venta (spec: docs/specs/precios-estables-bs.md, sección 7.2).
 
         Raises:
             ValueError: Si no hay tasa de cambio configurada
         """
+        from inventory.models import Product
+
         if exchange_rate is None:
             from utils.models import ExchangeRate
             exchange_rate = ExchangeRate.get_latest_rate()
@@ -298,7 +303,8 @@ class ProductService:
         old_selling_bs = product.selling_price_bs
 
         product.purchase_price_bs = product.purchase_price_usd * exchange_rate.bs_to_usd
-        product.selling_price_bs = product.selling_price_usd * exchange_rate.bs_to_usd
+        if product.pricing_mode != Product.PRICING_MODE_BS_FIXED:
+            product.selling_price_bs = product.selling_price_usd * exchange_rate.bs_to_usd
         product.save()
 
         logger.info("Product prices updated", extra={
@@ -322,7 +328,9 @@ class ProductService:
             exchange_rate: ExchangeRate a usar (default: tasa actual)
 
         Returns:
-            int: Cantidad de productos actualizados
+            int: Cantidad de productos actualizados. El precio de VENTA de los productos en
+                modo 'bs_fixed' nunca se toca aquí (es fijo por decisión del admin); el de
+                COMPRA sí se sincroniza siempre, para todos los productos (spec: sección 7.2).
 
         Raises:
             ValueError: Si no hay tasa de cambio configurada
@@ -342,7 +350,8 @@ class ProductService:
         with transaction.atomic():
             for product in queryset:
                 product.purchase_price_bs = product.purchase_price_usd * exchange_rate.bs_to_usd
-                product.selling_price_bs = product.selling_price_usd * exchange_rate.bs_to_usd
+                if product.pricing_mode != Product.PRICING_MODE_BS_FIXED:
+                    product.selling_price_bs = product.selling_price_usd * exchange_rate.bs_to_usd
                 product.save()
                 count += 1
 

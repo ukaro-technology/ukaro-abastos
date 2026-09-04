@@ -4,6 +4,7 @@ Tests para el Service Layer de productos (FASE 3.2)
 """
 
 from decimal import Decimal
+from datetime import timedelta
 from django.test import TestCase
 from django.contrib.auth import get_user_model
 from django.utils import timezone
@@ -409,6 +410,57 @@ class ProductServiceUpdatePricesTest(TestCase):
 
         self.product.refresh_from_db()
         self.assertEqual(self.product.purchase_price_bs, Decimal('500.00'))
+
+    def test_update_product_prices_does_not_touch_selling_price_bs_when_fixed(self):
+        """update_product_prices no debe tocar selling_price_bs de un producto bs_fixed —
+        pero SÍ debe seguir sincronizando purchase_price_bs (compra nunca se congela)"""
+        self.product.pricing_mode = Product.PRICING_MODE_BS_FIXED
+        self.product.selling_price_bs = Decimal('999.00')
+        self.product.save()
+
+        new_rate = ExchangeRate.objects.create(
+            date=timezone.now().date() + timedelta(days=1),
+            bs_to_usd=Decimal('50.00'),
+            updated_by=self.user
+        )
+        ProductService.update_product_prices(self.product, new_rate)
+
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.selling_price_bs, Decimal('999.00'))  # sin tocar
+        self.assertEqual(self.product.purchase_price_bs, Decimal('500.00'))  # 10 * 50, sí se actualiza
+
+    def test_bulk_update_prices_excludes_selling_price_of_bs_fixed_products(self):
+        """bulk_update_prices no debe tocar el precio de VENTA de productos bs_fixed, pero sí
+        el de compra de todos"""
+        self.product.pricing_mode = Product.PRICING_MODE_BS_FIXED
+        self.product.selling_price_bs = Decimal('999.00')
+        self.product.save()
+
+        usd_product = Product.objects.create(
+            name='Producto USD normal',
+            barcode='USDNORMAL999',
+            category=self.category,
+            purchase_price_usd=Decimal('20.00'),
+            purchase_price_bs=Decimal('910.00'),
+            selling_price_usd=Decimal('30.00'),
+            selling_price_bs=Decimal('1365.00')
+        )
+
+        new_rate = ExchangeRate.objects.create(
+            date=timezone.now().date() + timedelta(days=1),
+            bs_to_usd=Decimal('50.00'),
+            updated_by=self.user
+        )
+        count = ProductService.bulk_update_prices(Product.objects.all(), new_rate)
+
+        self.assertEqual(count, 2)
+
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.selling_price_bs, Decimal('999.00'))  # bs_fixed intacto
+        self.assertEqual(self.product.purchase_price_bs, Decimal('500.00'))  # compra sí actualiza
+
+        usd_product.refresh_from_db()
+        self.assertEqual(usd_product.selling_price_bs, Decimal('1500.00'))  # 30 * 50, normal
 
 
 class ProductServiceIntegrationTest(TestCase):

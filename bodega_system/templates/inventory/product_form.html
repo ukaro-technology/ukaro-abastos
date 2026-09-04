@@ -542,6 +542,29 @@
                         </div>
 
                         <div class="p-6 space-y-4">
+                            <!-- MODO DE PRECIO DE VENTA (spec: docs/specs/precios-estables-bs.md) -->
+                            <div class="form-group">
+                                <label for="{{ form.pricing_mode.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-2">
+                                    Modo de precio de venta
+                                </label>
+                                <select id="{{ form.pricing_mode.id_for_label }}"
+                                        name="{{ form.pricing_mode.name }}"
+                                        x-model="pricingMode"
+                                        class="w-full px-4 py-3 text-base border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white text-gray-900">
+                                    {% for value, label in form.pricing_mode.field.choices %}
+                                        <option value="{{ value }}" {% if form.pricing_mode.value == value %}selected{% endif %}>{{ label }}</option>
+                                    {% endfor %}
+                                </select>
+                                <p class="mt-1 text-xs text-gray-500">
+                                    "Precio estable en Bs" fija el precio de venta en bolívares — no sube ni
+                                    baja solo porque cambie la tasa BCV, hasta que lo edites a mano. El
+                                    precio de compra a proveedores siempre sigue en USD, sin importar el modo.
+                                </p>
+                                {% if form.pricing_mode.errors %}
+                                    <p class="mt-1 text-sm text-red-600">{{ form.pricing_mode.errors.0 }}</p>
+                                {% endif %}
+                            </div>
+
                             <div class="form-group">
                                 <label for="{{ form.purchase_price_usd.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-2">
                                     Precio de Compra (USD) *
@@ -567,7 +590,8 @@
                                 {% endif %}
                             </div>
 
-                            <div class="form-group">
+                            <!-- Precio de venta en USD: manda en modo 'usd' (comportamiento actual) -->
+                            <div class="form-group" x-show="pricingMode === 'usd'">
                                 <label for="{{ form.selling_price_usd.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-2">
                                     Precio de Venta (USD) *
                                 </label>
@@ -582,7 +606,7 @@
                                            placeholder="0.00"
                                            step="0.001"
                                            min="0"
-                                           required>
+                                           :required="pricingMode === 'usd'">
                                     <div class="absolute inset-y-0 right-0 pr-3 flex items-center">
                                         <span class="text-gray-500 text-sm font-medium">USD</span>
                                     </div>
@@ -592,20 +616,51 @@
                                 {% endif %}
                             </div>
 
-                            <!-- CONVERSIÓN AUTOMÁTICA A BS -->
+                            <!-- Precio de venta fijo en Bs: manda en modo 'bs_fixed' -->
+                            <div class="form-group" x-show="pricingMode === 'bs_fixed'" x-cloak>
+                                <label for="{{ form.selling_price_bs.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-2">
+                                    Precio de Venta Fijo (Bs) *
+                                </label>
+                                <div class="relative">
+                                    <input type="number"
+                                           id="{{ form.selling_price_bs.id_for_label }}"
+                                           name="{{ form.selling_price_bs.name }}"
+                                           value="{{ form.selling_price_bs.value|unlocalize|default:'' }}"
+                                           x-model="sellingPriceBs"
+                                           class="w-full px-4 py-3 text-base border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white text-gray-900"
+                                           placeholder="0.00"
+                                           step="0.01"
+                                           min="0"
+                                           :required="pricingMode === 'bs_fixed'">
+                                    <div class="absolute inset-y-0 right-0 pr-3 flex items-center">
+                                        <span class="text-gray-500 text-sm font-medium">Bs</span>
+                                    </div>
+                                </div>
+                                {% if form.selling_price_bs.errors %}
+                                    <p class="mt-1 text-sm text-red-600">{{ form.selling_price_bs.errors.0 }}</p>
+                                {% endif %}
+                                {% if latest_exchange_rate %}
+                                <p class="mt-1 text-xs text-gray-500" x-show="sellingPriceBs > 0">
+                                    Equivalente USD (solo referencia, no dirige la venta):
+                                    <span class="font-medium" x-text="'$' + (sellingPriceBs / {{ latest_exchange_rate.bs_to_usd|unlocalize }}).toFixed(2)"></span>
+                                </p>
+                                {% endif %}
+                            </div>
+
+                            <!-- CONVERSIÓN AUTOMÁTICA A BS (solo aplica al modo 'usd') -->
                             {% if latest_exchange_rate %}
-                            <div class="currency-converter" x-show="purchasePrice > 0 || sellingPrice > 0">
+                            <div class="currency-converter" x-show="pricingMode === 'usd' && (purchasePrice > 0 || sellingPrice > 0)">
                                 <div class="currency-rate">
                                     Tasa actual: {{ latest_exchange_rate.bs_to_usd }} Bs/USD ({{ latest_exchange_rate.date|date:"d/m/Y" }})
                                 </div>
                                 <div class="currency-conversion">
                                     <div class="conversion-item" x-show="purchasePrice > 0">
                                         <div class="conversion-label">Precio Compra</div>
-                                        <div class="conversion-value" x-text="'Bs ' + (purchasePrice * {{ latest_exchange_rate.bs_to_usd }}).toFixed(2)"></div>
+                                        <div class="conversion-value" x-text="'Bs ' + (purchasePrice * {{ latest_exchange_rate.bs_to_usd|unlocalize }}).toFixed(2)"></div>
                                     </div>
                                     <div class="conversion-item" x-show="sellingPrice > 0">
                                         <div class="conversion-label">Precio Venta</div>
-                                        <div class="conversion-value" x-text="'Bs ' + (sellingPrice * {{ latest_exchange_rate.bs_to_usd }}).toFixed(2)"></div>
+                                        <div class="conversion-value" x-text="'Bs ' + (sellingPrice * {{ latest_exchange_rate.bs_to_usd|unlocalize }}).toFixed(2)"></div>
                                     </div>
                                 </div>
                             </div>
@@ -622,8 +677,9 @@
                             </div>
                             {% endif %}
 
-                            <!-- Calculadora de Margen -->
-                            <div class="bg-gray-50 p-4 rounded-lg" x-show="purchasePrice > 0 && sellingPrice > 0">
+                            <!-- Calculadora de Margen (usa effectiveSellingPrice: en modo Bs fijo es
+                                 el equivalente informativo Bs/tasa, igual que en el backend) -->
+                            <div class="bg-gray-50 p-4 rounded-lg" x-show="purchasePrice > 0 && effectiveSellingPrice > 0">
                                 <h4 class="text-sm font-medium text-gray-700 mb-2">Análisis de Margen (USD)</h4>
                                 <div class="grid grid-cols-2 gap-4 text-sm">
                                     <div>
@@ -716,7 +772,8 @@
                 </div>
             </div>
 
-            <!-- PRECIOS AL MAYOR EN USD -->
+            <!-- PRECIOS AL MAYOR EN USD (no disponible en modo "Precio estable en Bs" — no tiene
+                 un precio al mayor fijo equivalente, ver ProductForm.clean()) -->
             <div class="bg-white rounded-xl shadow-lg overflow-hidden" x-data="{ bulkEnabled: document.getElementById('{{ form.is_bulk_pricing.id_for_label }}')?.checked || false }">
                 <div class="bulk-pricing-section p-6">
                     <div class="flex items-center justify-between">
@@ -726,16 +783,21 @@
                             </svg>
                             Precios al Mayor (USD)
                         </h2>
-                        <label class="flex items-center">
+                        <label class="flex items-center" :class="{ 'opacity-50 cursor-not-allowed': pricingMode === 'bs_fixed' }">
                             <input type="checkbox"
                                    id="{{ form.is_bulk_pricing.id_for_label }}"
                                    name="{{ form.is_bulk_pricing.name }}"
                                    {% if form.is_bulk_pricing.value %}checked{% endif %}
                                    x-model="bulkEnabled"
+                                   @change="if (pricingMode === 'bs_fixed') bulkEnabled = false"
+                                   :disabled="pricingMode === 'bs_fixed'"
                                    class="w-5 h-5 text-white bg-white border-2 border-white rounded focus:ring-blue-500 focus:ring-2 mr-3">
                             <span class="ml-2 text-white font-medium">Habilitar</span>
                         </label>
                     </div>
+                    <p class="mt-2 text-xs text-blue-100" x-show="pricingMode === 'bs_fixed'">
+                        No disponible con "Precio estable en Bs" activo.
+                    </p>
                 </div>
 
                 <div x-show="bulkEnabled"
@@ -866,14 +928,29 @@ function enhancedProductFormUSD() {
         sellingPrice: {% if form.selling_price_usd.value %}{{ form.selling_price_usd.value|unlocalize }}{% else %}0{% endif %},
         bulkPrice: {% if form.bulk_price_usd.value %}{{ form.bulk_price_usd.value|unlocalize }}{% else %}0{% endif %},
 
+        // Precio estable en Bs (spec: docs/specs/precios-estables-bs.md)
+        pricingMode: '{{ form.pricing_mode.value|default:"usd" }}',
+        sellingPriceBs: {% if form.selling_price_bs.value %}{{ form.selling_price_bs.value|unlocalize }}{% else %}0{% endif %},
+        exchangeRate: {% if latest_exchange_rate %}{{ latest_exchange_rate.bs_to_usd|unlocalize }}{% else %}0{% endif %},
+
+        // Precio de venta USD "efectivo" para el análisis de margen — en modo bs_fixed es el
+        // equivalente informativo (Bs fijo / tasa), igual que calcula el servidor en
+        // Product.get_current_price_usd().
+        get effectiveSellingPrice() {
+            if (this.pricingMode === 'bs_fixed') {
+                return this.exchangeRate > 0 ? (this.sellingPriceBs / this.exchangeRate) : 0;
+            }
+            return this.sellingPrice;
+        },
+
         // Calculated properties para márgenes
         get margin() {
-            return this.sellingPrice - this.purchasePrice;
+            return this.effectiveSellingPrice - this.purchasePrice;
         },
 
         get marginPercentage() {
             if (this.purchasePrice === 0) return 0;
-            return ((this.sellingPrice - this.purchasePrice) / this.purchasePrice) * 100;
+            return ((this.effectiveSellingPrice - this.purchasePrice) / this.purchasePrice) * 100;
         },
 
         get bulkDiscount() {

@@ -14,16 +14,17 @@ class CategoryAdmin(admin.ModelAdmin):
 class ProductAdmin(SimpleHistoryAdmin):
     """Admin para productos con precios en USD"""
     list_display = (
-        'name', 'barcode', 'category', 'unit_type', 
+        'name', 'barcode', 'category', 'unit_type',
+        'pricing_mode',  # Precio estable en Bs (spec: docs/specs/precios-estables-bs.md)
         # ⭐ CAMBIO: Mostrar precios USD
-        'purchase_price_usd', 'selling_price_usd', 
+        'purchase_price_usd', 'selling_price_usd',
         'get_current_price_bs',  # Mostrar equivalente en Bs
         'stock', 'stock_status', 'is_active'
     )
-    list_filter = ('category', 'unit_type', 'is_active', 'is_bulk_pricing')
+    list_filter = ('category', 'unit_type', 'is_active', 'is_bulk_pricing', 'pricing_mode')
     search_fields = ('name', 'barcode', 'description')
     readonly_fields = ('created_at', 'updated_at', 'get_current_price_bs', 'get_current_purchase_price_bs')
-    
+
     fieldsets = (
         ('Información Básica', {
             'fields': ('name', 'barcode', 'category', 'description', 'image', 'unit_type')
@@ -33,6 +34,15 @@ class ProductAdmin(SimpleHistoryAdmin):
                 'purchase_price_usd', 'selling_price_usd',
                 'get_current_purchase_price_bs', 'get_current_price_bs'
             )
+        }),
+        ('Precio estable en Bs', {
+            'fields': ('pricing_mode', 'selling_price_bs'),
+            'description': (
+                'Modo "bs_fixed": selling_price_bs manda tal cual, no se recalcula con la '
+                'tasa BCV. La validación completa (equivalente USD informativo, exclusión de '
+                'precio al mayor) vive en ProductForm — usada por las vistas de la app, no '
+                'por este panel de admin.'
+            ),
         }),
         ('Inventario', {
             'fields': ('stock', 'min_stock', 'is_active')

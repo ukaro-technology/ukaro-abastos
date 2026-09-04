@@ -17,8 +17,10 @@ from django.core.cache import cache
 from django.urls import reverse
 from django.utils import timezone
 from django.db import IntegrityError
+from datetime import timedelta
 
 from inventory.models import Category, Product, InventoryAdjustment
+from inventory.forms import ProductForm
 from utils.models import ExchangeRate
 
 User = get_user_model()
@@ -34,10 +36,10 @@ def make_admin(username='inv_admin'):
 def make_employee(username='inv_emp'):
     return User.objects.create_user(username=username, password='pass123', is_employee=True)
 
-def make_exchange_rate(user, rate='45.50'):
+def make_exchange_rate(user, rate='45.50', days_offset=0):
     cache.clear()
     return ExchangeRate.objects.create(
-        date=timezone.now().date(),
+        date=timezone.now().date() + timedelta(days=days_offset),
         bs_to_usd=Decimal(rate),
         updated_by=user
     )
@@ -197,6 +199,244 @@ class ProductModelTest(TestCase):
         p = make_product(self.cat)
         p.unit_type = 'kg'
         self.assertEqual(p.unit_display, 'Kilogramo')
+
+
+# ─────────────────────────────────────────────
+# PRODUCT PRICING MODE TESTS (spec: precios-estables-bs)
+# ─────────────────────────────────────────────
+
+class ProductPricingModeTest(TestCase):
+    """Tests de Product.get_current_price_bs()/get_current_price_usd() para el modo
+    'bs_fixed' — spec: docs/specs/precios-estables-bs.md"""
+
+    def setUp(self):
+        cache.clear()
+        self.admin = make_admin('pm_admin')
+        self.exchange_rate = make_exchange_rate(self.admin, rate='40.00')
+        self.cat = make_category('Pricing Mode Cat')
+
+    def test_default_pricing_mode_is_usd(self):
+        """Un producto nuevo queda en modo 'usd' por defecto (sin cambios para nadie)"""
+        p = make_product(self.cat)
+        self.assertEqual(p.pricing_mode, Product.PRICING_MODE_USD)
+
+    def test_bs_fixed_price_ignores_exchange_rate(self):
+        """En modo bs_fixed, get_current_price_bs devuelve selling_price_bs tal cual"""
+        p = make_product(self.cat, selling_usd='8.00')
+        p.pricing_mode = Product.PRICING_MODE_BS_FIXED
+        p.selling_price_bs = Decimal('500.00')
+        p.save()
+
+        self.assertEqual(p.get_current_price_bs(), Decimal('500.00'))
+
+    def test_bs_fixed_price_does_not_move_with_new_rate(self):
+        """Cambiar la tasa BCV no debe afectar el precio de un producto bs_fixed"""
+        p = make_product(self.cat, selling_usd='8.00')
+        p.pricing_mode = Product.PRICING_MODE_BS_FIXED
+        p.selling_price_bs = Decimal('500.00')
+        p.save()
+
+        make_exchange_rate(self.admin, rate='120.00', days_offset=1)  # tasa se dispara
+
+        self.assertEqual(p.get_current_price_bs(), Decimal('500.00'))
+
+    def test_usd_mode_price_still_follows_rate(self):
+        """Un producto en modo 'usd' (default) sigue recalculando con la tasa, sin cambios"""
+        p = make_product(self.cat, selling_usd='8.00')
+        self.assertEqual(p.get_current_price_bs(), Decimal('8.00') * Decimal('40.00'))
+
+        make_exchange_rate(self.admin, rate='50.00', days_offset=1)
+        self.assertEqual(p.get_current_price_bs(), Decimal('8.00') * Decimal('50.00'))
+
+    def test_get_current_price_usd_bs_fixed_is_informative_equivalent(self):
+        """En bs_fixed, get_current_price_usd() es Bs fijo / tasa actual — no dirige la venta"""
+        p = make_product(self.cat, selling_usd='8.00')
+        p.pricing_mode = Product.PRICING_MODE_BS_FIXED
+        p.selling_price_bs = Decimal('400.00')
+        p.save()
+
+        self.assertEqual(p.get_current_price_usd(), Decimal('400.00') / Decimal('40.00'))
+
+    def test_get_current_price_usd_usd_mode_unchanged(self):
+        """En modo usd, get_current_price_usd() sigue siendo selling_price_usd"""
+        p = make_product(self.cat, selling_usd='8.00')
+        self.assertEqual(p.get_current_price_usd(), Decimal('8.00'))
+
+    def test_bs_fixed_ignores_bulk_pricing(self):
+        """El modo bs_fixed no tiene equivalente de precio al mayor — quantity se ignora"""
+        p = make_product(self.cat, selling_usd='8.00')
+        p.pricing_mode = Product.PRICING_MODE_BS_FIXED
+        p.selling_price_bs = Decimal('500.00')
+        p.is_bulk_pricing = True
+        p.bulk_min_quantity = Decimal('10')
+        p.bulk_price_usd = Decimal('6.00')
+        p.save()
+
+        self.assertEqual(p.get_current_price_bs(quantity=Decimal('20')), Decimal('500.00'))
+
+    def test_usd_mode_still_respects_bulk_pricing_with_quantity(self):
+        """En modo usd, get_current_price_bs con quantity sigue respetando precio al mayor"""
+        p = make_product(self.cat, selling_usd='8.00')
+        p.is_bulk_pricing = True
+        p.bulk_min_quantity = Decimal('10')
+        p.bulk_price_usd = Decimal('6.00')
+        p.save()
+
+        self.assertEqual(
+            p.get_current_price_bs(quantity=Decimal('20')),
+            Decimal('6.00') * Decimal('40.00')
+        )
+        self.assertEqual(
+            p.get_current_price_bs(quantity=Decimal('1')),
+            Decimal('8.00') * Decimal('40.00')
+        )
+
+    def test_get_current_price_bs_no_rate_bs_fixed_still_returns_fixed_price(self):
+        """Sin tasa configurada, un producto bs_fixed sigue devolviendo su precio fijo"""
+        p = make_product(self.cat, selling_usd='8.00')
+        p.pricing_mode = Product.PRICING_MODE_BS_FIXED
+        p.selling_price_bs = Decimal('500.00')
+        p.save()
+
+        ExchangeRate.objects.all().delete()
+        cache.clear()
+
+        self.assertEqual(p.get_current_price_bs(), Decimal('500.00'))
+
+    def test_exchange_rate_param_avoids_extra_lookup(self):
+        """Si se pasa exchange_rate explícito, se usa esa tasa y no la más reciente"""
+        p = make_product(self.cat, selling_usd='8.00')
+        other_rate = make_exchange_rate(self.admin, rate='999.00', days_offset=1)
+        # Sin exchange_rate explícito usaría la tasa más reciente (999.00); con el parámetro
+        # se debe respetar exactamente lo que se pasó (self.exchange_rate = 40.00).
+        result = p.get_current_price_bs(exchange_rate=self.exchange_rate)
+        self.assertEqual(result, Decimal('8.00') * Decimal('40.00'))
+
+
+# ─────────────────────────────────────────────
+# PRODUCT FORM TESTS (spec: precios-estables-bs)
+# ─────────────────────────────────────────────
+
+class ProductFormPricingModeTest(TestCase):
+    """Tests de ProductForm para el toggle de modo de precio"""
+
+    def setUp(self):
+        cache.clear()
+        self.admin = make_admin('form_pm_admin')
+        self.exchange_rate = make_exchange_rate(self.admin, rate='40.00')
+        self.cat = make_category('Form Pricing Cat')
+
+    def _base_data(self, **overrides):
+        data = {
+            'name': 'Producto Form',
+            'barcode': 'FORMPM001',
+            'category': self.cat.pk,
+            'unit_type': 'unit',
+            'description': '',
+            'purchase_price_usd': '5.00',
+            'selling_price_usd': '8.00',
+            'min_stock': '5',
+            'is_active': 'on',
+            'pricing_mode': Product.PRICING_MODE_USD,
+        }
+        data.update(overrides)
+        return data
+
+    def test_usd_mode_requires_selling_price_usd(self):
+        """En modo usd (default), selling_price_usd sigue siendo requerido"""
+        data = self._base_data(selling_price_usd='')
+        form = ProductForm(data=data)
+        self.assertFalse(form.is_valid())
+        self.assertIn('selling_price_usd', form.errors)
+
+    def test_bs_fixed_requires_selling_price_bs(self):
+        """En modo bs_fixed, selling_price_bs es requerido aunque selling_price_usd venga vacío"""
+        data = self._base_data(
+            pricing_mode=Product.PRICING_MODE_BS_FIXED,
+            selling_price_usd='',
+            selling_price_bs='',
+        )
+        form = ProductForm(data=data)
+        self.assertFalse(form.is_valid())
+        self.assertIn('selling_price_bs', form.errors)
+        # No debe exigir selling_price_usd en este modo
+        self.assertNotIn('selling_price_usd', form.errors)
+
+    def test_bs_fixed_saves_fixed_price_and_recalculates_usd_reference(self):
+        """Al guardar en modo bs_fixed, selling_price_bs manda y selling_price_usd
+        queda como el equivalente informativo (Bs fijo / tasa actual)"""
+        data = self._base_data(
+            pricing_mode=Product.PRICING_MODE_BS_FIXED,
+            selling_price_usd='',
+            selling_price_bs='400.00',
+        )
+        form = ProductForm(data=data)
+        self.assertTrue(form.is_valid(), form.errors)
+        product = form.save()
+
+        self.assertEqual(product.pricing_mode, Product.PRICING_MODE_BS_FIXED)
+        self.assertEqual(product.selling_price_bs, Decimal('400.00'))
+        self.assertEqual(product.selling_price_usd, Decimal('400.00') / Decimal('40.00'))
+        self.assertEqual(product.get_current_price_bs(), Decimal('400.00'))
+
+    def test_bs_fixed_price_survives_rate_change_after_save(self):
+        """El precio fijo guardado por el form no se mueve si luego cambia la tasa"""
+        data = self._base_data(
+            pricing_mode=Product.PRICING_MODE_BS_FIXED,
+            selling_price_usd='',
+            selling_price_bs='400.00',
+        )
+        form = ProductForm(data=data)
+        self.assertTrue(form.is_valid(), form.errors)
+        product = form.save()
+
+        make_exchange_rate(self.admin, rate='90.00', days_offset=1)
+        product.refresh_from_db()
+        self.assertEqual(product.get_current_price_bs(), Decimal('400.00'))
+
+    def test_usd_mode_refreshes_vestigial_bs_columns(self):
+        """En modo usd, purchase_price_bs/selling_price_bs se refrescan con la tasa actual al
+        guardar (decisión 7.3 de la spec — no reemplaza el fix del reporte, pero evita que la
+        columna cruda quede más desactualizada de lo necesario)"""
+        data = self._base_data(purchase_price_usd='5.00', selling_price_usd='8.00')
+        form = ProductForm(data=data)
+        self.assertTrue(form.is_valid(), form.errors)
+        product = form.save()
+
+        self.assertEqual(product.purchase_price_bs, Decimal('5.00') * Decimal('40.00'))
+        self.assertEqual(product.selling_price_bs, Decimal('8.00') * Decimal('40.00'))
+
+    def test_bs_fixed_rejects_bulk_pricing(self):
+        """El precio al mayor no tiene equivalente en modo bs_fixed — debe rechazarse"""
+        data = self._base_data(
+            pricing_mode=Product.PRICING_MODE_BS_FIXED,
+            selling_price_usd='',
+            selling_price_bs='400.00',
+            is_bulk_pricing='on',
+            bulk_min_quantity='10',
+            bulk_price_usd='6.00',
+        )
+        form = ProductForm(data=data)
+        self.assertFalse(form.is_valid())
+        self.assertIn('is_bulk_pricing', form.errors)
+
+    def test_bs_fixed_requires_positive_price(self):
+        """selling_price_bs <= 0 en modo bs_fixed debe fallar"""
+        data = self._base_data(
+            pricing_mode=Product.PRICING_MODE_BS_FIXED,
+            selling_price_usd='',
+            selling_price_bs='0',
+        )
+        form = ProductForm(data=data)
+        self.assertFalse(form.is_valid())
+        self.assertIn('selling_price_bs', form.errors)
+
+    def test_usd_mode_unchanged_validation_selling_gt_purchase(self):
+        """Comportamiento actual sin cambios: venta debe ser mayor que compra en modo usd"""
+        data = self._base_data(purchase_price_usd='10.00', selling_price_usd='5.00')
+        form = ProductForm(data=data)
+        self.assertFalse(form.is_valid())
+        self.assertIn('selling_price_usd', form.errors)
 
 
 # ─────────────────────────────────────────────
@@ -492,3 +732,69 @@ class ProductAPITest(TestCase):
         self.assertEqual(response.status_code, 200)
         data = json.loads(response.content)
         self.assertEqual(data.get('name'), 'Producto API')
+
+
+# ─────────────────────────────────────────────
+# STOCK SUMMARY API — VALORIZACIÓN (spec: precios-estables-bs, decisión 7.3)
+# ─────────────────────────────────────────────
+
+class ProductStockSummaryValorizationTest(TestCase):
+    """El reporte de valorización calcula en vivo con la tasa actual (ya no lee las columnas
+    purchase_price_bs/selling_price_bs, vestigiales) y respeta el precio estable en Bs."""
+
+    def setUp(self):
+        cache.clear()
+        self.client = Client()
+        self.admin = make_admin('valor_admin')
+        make_exchange_rate(self.admin, rate='40.00')
+        self.cat = make_category('Valor Cat')
+        self.client.login(username='valor_admin', password='pass123')
+        self.url = reverse('inventory:product_stock_summary_api')
+
+    def test_selling_value_uses_live_rate_for_usd_products(self):
+        """Producto en modo usd: valor de venta = stock × usd × tasa actual, no la columna vieja"""
+        make_product(
+            self.cat, barcode='VALORUSD001', selling_usd='8.00', purchase_usd='5.00', stock=10
+        )
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.content)['summary']
+        self.assertAlmostEqual(
+            data['total_selling_value'], float(10 * Decimal('8.00') * Decimal('40.00')), places=2
+        )
+        self.assertAlmostEqual(
+            data['total_purchase_value'], float(10 * Decimal('5.00') * Decimal('40.00')), places=2
+        )
+
+    def test_selling_value_uses_fixed_bs_price_for_bs_fixed_products(self):
+        """Producto en modo bs_fixed: valor de venta usa el precio fijo, no usd × tasa"""
+        p = make_product(
+            self.cat, barcode='VALORFIX001', selling_usd='8.00', purchase_usd='5.00', stock=10
+        )
+        p.pricing_mode = Product.PRICING_MODE_BS_FIXED
+        p.selling_price_bs = Decimal('500.00')
+        p.save()
+
+        response = self.client.get(self.url)
+        data = json.loads(response.content)['summary']
+
+        # Venta: 10 unidades × 500.00 fijo (NO 10 × 8.00 × 40.00)
+        self.assertAlmostEqual(data['total_selling_value'], float(10 * Decimal('500.00')), places=2)
+        # Compra: siempre sigue la tasa actual, sin importar el modo de venta
+        self.assertAlmostEqual(
+            data['total_purchase_value'], float(10 * Decimal('5.00') * Decimal('40.00')), places=2
+        )
+
+    def test_mixed_products_valorization_is_additive(self):
+        """La valorización de una mezcla de productos usd y bs_fixed suma correctamente"""
+        make_product(self.cat, barcode='MIXUSD001', selling_usd='8.00', purchase_usd='5.00', stock=10)
+        p2 = make_product(self.cat, barcode='MIXFIX001', selling_usd='8.00', purchase_usd='5.00', stock=5)
+        p2.pricing_mode = Product.PRICING_MODE_BS_FIXED
+        p2.selling_price_bs = Decimal('300.00')
+        p2.save()
+
+        response = self.client.get(self.url)
+        data = json.loads(response.content)['summary']
+
+        expected_selling = (10 * Decimal('8.00') * Decimal('40.00')) + (5 * Decimal('300.00'))
+        self.assertAlmostEqual(data['total_selling_value'], float(expected_selling), places=2)
