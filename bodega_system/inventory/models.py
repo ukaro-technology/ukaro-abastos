@@ -34,9 +34,12 @@ class Product(models.Model):
     # Modo de precio de venta (spec: docs/specs/precios-estables-bs.md)
     PRICING_MODE_USD = 'usd'
     PRICING_MODE_BS_FIXED = 'bs_fixed'
+    # Labels cortos a propósito: el <select> nativo trunca/desborda con texto largo (bug
+    # visual reportado por Simón — ver product_form.html). El detalle completo de cada modo
+    # vive en el texto de ayuda debajo del select, no en la opción misma.
     PRICING_MODE_CHOICES = (
-        (PRICING_MODE_USD, 'USD (precio en Bs se calcula con la tasa BCV)'),
-        (PRICING_MODE_BS_FIXED, 'Precio estable en Bs (no se recalcula con la tasa)'),
+        (PRICING_MODE_USD, 'USD (recalcula con la tasa BCV)'),
+        (PRICING_MODE_BS_FIXED, 'Precio estable en Bs'),
     )
 
     name = models.CharField(max_length=200, verbose_name="Nombre")

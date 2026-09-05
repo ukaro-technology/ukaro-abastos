@@ -193,7 +193,18 @@ def product_by_barcode_api(request, barcode):
         
         # Verificar stock disponible
         stock_available = product.stock > 0
-        
+
+        # Precio al mayor en Bs (calculado con la tasa actual — el modelo solo guarda
+        # bulk_price_usd, no existe una columna bulk_price_bs; bug preexistente corregido:
+        # antes esta vista intentaba leer product.bulk_price_bs, que no existe, y tiraba
+        # AttributeError/500 apenas un producto con precio al mayor pasaba por esta ruta)
+        bulk_price_bs = None
+        if product.is_bulk_pricing and product.bulk_price_usd:
+            from utils.models import ExchangeRate
+            latest_rate = ExchangeRate.get_latest_rate()
+            if latest_rate:
+                bulk_price_bs = float(product.bulk_price_usd * latest_rate.bs_to_usd)
+
         data = {
             'id': product.id,
             'name': product.name,
@@ -220,7 +231,7 @@ def product_by_barcode_api(request, barcode):
             'bulk_pricing': {
                 'enabled': product.is_bulk_pricing,
                 'min_quantity': float(product.bulk_min_quantity) if product.bulk_min_quantity else None,
-                'bulk_price': float(product.bulk_price_bs) if product.bulk_price_bs else None
+                'bulk_price': bulk_price_bs
             } if product.is_bulk_pricing else None,
             
             # Estado del stock

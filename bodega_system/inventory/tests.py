@@ -699,6 +699,24 @@ class ProductAPITest(TestCase):
         response = self.client.get(url)
         self.assertIn(response.status_code, [404, 200])  # Puede ser 404 o JSON con error
 
+    def test_barcode_api_with_bulk_pricing_does_not_crash(self):
+        """Bug preexistente corregido: un producto con precio al mayor activo no debe
+        romper esta ruta con AttributeError (leía product.bulk_price_bs, que no existe)"""
+        bulk_product = make_product(
+            self.cat, barcode='API_BULK001', name='Producto Mayor', selling_usd='8.00'
+        )
+        bulk_product.is_bulk_pricing = True
+        bulk_product.bulk_min_quantity = Decimal('10')
+        bulk_product.bulk_price_usd = Decimal('6.00')
+        bulk_product.save()
+
+        url = reverse('inventory:product_by_barcode_api', args=['API_BULK001'])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.content)
+        self.assertTrue(data['bulk_pricing']['enabled'])
+        self.assertEqual(data['bulk_pricing']['bulk_price'], float(Decimal('6.00') * Decimal('45.50')))
+
     def test_validate_barcode_unique(self):
         """Validar barcode único debe retornar disponible (endpoint POST con JSON)"""
         url = reverse('inventory:validate_barcode_api')
