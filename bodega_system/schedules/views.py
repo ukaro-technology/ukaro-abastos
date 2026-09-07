@@ -126,6 +126,7 @@ def assignment_update(request, date_str, shift_id):
         'date': day,
         'assignment': assignment,
         'error': error,
+        'is_admin_user': True,
         'employees': schedulable_employees(),
     })
 

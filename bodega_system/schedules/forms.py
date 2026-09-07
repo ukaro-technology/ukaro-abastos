@@ -73,7 +73,10 @@ class ScheduleExceptionForm(forms.ModelForm):
             'employee': forms.Select(attrs={'class': INPUT_CLASSES}),
             'date_start': forms.DateInput(attrs={'class': INPUT_CLASSES, 'type': 'date'}),
             'date_end': forms.DateInput(attrs={'class': INPUT_CLASSES, 'type': 'date'}),
-            'exception_type': forms.Select(attrs={'class': INPUT_CLASSES}),
+            # RadioSelect en vez de Select: el template lo pinta como pills de color (una por
+            # tipo de excepción), igual a los badges que ya se ven en las listas — más notable
+            # que un <select> plano, y sigue siendo un input nativo semántico (radios reales).
+            'exception_type': forms.RadioSelect(),
             'reason': forms.TextInput(attrs={
                 'class': INPUT_CLASSES,
                 'placeholder': 'Detalle opcional (ej. "cita médica", "viaje familiar")'
@@ -84,6 +87,10 @@ class ScheduleExceptionForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields['employee'].queryset = schedulable_employees()
         self.fields['reason'].required = False
+        # Django agrega automáticamente una opción en blanco a `exception_type` porque el campo
+        # del modelo no tiene `default` — con RadioSelect eso se ve como una 5ta pill vacía sin
+        # sentido (el campo es obligatorio, ver clean()). Se saca dejando solo las 4 reales.
+        self.fields['exception_type'].choices = ScheduleException.EXCEPTION_TYPES
 
     def clean(self):
         cleaned_data = super().clean()

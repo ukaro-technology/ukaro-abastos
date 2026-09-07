@@ -1,4 +1,5 @@
 {% extends 'base/base.html' %}
+{% load schedules_extras %}
 
 {% block title %}Días Libres - Sistema de Bodega{% endblock %}
 
@@ -50,11 +51,24 @@
             </thead>
             <tbody id="exceptions-body" class="bg-white divide-y divide-gray-200">
                 {% for exception in exceptions %}
+                {% exception_theme exception.exception_type as extheme %}
                 <tr id="exception-row-{{ exception.pk }}">
                     {% if is_admin_user %}
-                        <td class="px-4 py-3 text-sm text-gray-900">{{ exception.employee.get_full_name|default:exception.employee.username }}</td>
+                        <td class="px-4 py-3 text-sm text-gray-900">
+                            <div class="flex items-center gap-2">
+                                {% avatar_theme exception.employee as avatar %}
+                                <span class="flex-shrink-0 w-6 h-6 rounded-full {{ avatar.bg }} {{ avatar.text }} flex items-center justify-center text-[10px] font-bold">
+                                    {{ exception.employee|initials }}
+                                </span>
+                                <span class="font-medium">{{ exception.employee.get_full_name|default:exception.employee.username }}</span>
+                            </div>
+                        </td>
                     {% endif %}
-                    <td class="px-4 py-3 text-sm text-gray-700">{{ exception.get_exception_type_display }}</td>
+                    <td class="px-4 py-3">
+                        <span class="px-2 py-0.5 rounded-full {{ extheme.bg }} {{ extheme.text }} text-xs font-medium">
+                            {{ exception.get_exception_type_display }}
+                        </span>
+                    </td>
                     <td class="px-4 py-3 text-sm text-gray-700">{{ exception.date_start|date:"d/m/Y" }}</td>
                     <td class="px-4 py-3 text-sm text-gray-700">{{ exception.date_end|date:"d/m/Y" }}</td>
                     <td class="px-4 py-3 text-sm text-gray-500">{{ exception.reason|default:"—" }}</td>

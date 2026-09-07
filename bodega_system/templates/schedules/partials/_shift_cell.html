@@ -1,28 +1,102 @@
+{% load schedules_extras %}
 {% comment %}
-Celda editable de la planilla — un (fecha, turno). Se usa tanto en el render inicial de
+Bloque de un (fecha, turno) dentro de la tarjeta del día. Se usa tanto en el render inicial de
 week_view.html (vía {% include %}) como en la respuesta del endpoint HTMX que asigna/desasigna
 un empleado (schedules:assignment_update), que devuelve exactamente este mismo partial para
-reemplazar la celda sin recargar la página completa.
+reemplazarlo sin recargar la página completa.
+
+Patrón de interacción (solo admin): el bloque muestra un "chip" de solo lectura (avatar + nombre,
+o un placeholder punteado si no hay nadie asignado). Al hacer clic se revela el <select> real
+para cambiar la asignación — evita tener un <select> crudo siempre visible en las 14 celdas de
+la semana, que es lo que se sentía "muy básico".
 {% endcomment %}
-<td id="cell-{{ date|date:'Y-m-d' }}-{{ shift.id }}" class="px-2 py-2 align-top">
-    <select name="employee"
-            hx-post="{% url 'schedules:assignment_update' date|date:'Y-m-d' shift.id %}"
-            hx-trigger="change"
-            hx-target="#cell-{{ date|date:'Y-m-d' }}-{{ shift.id }}"
-            hx-swap="outerHTML"
-            hx-indicator="#cell-spinner-{{ date|date:'Y-m-d' }}-{{ shift.id }}"
-            class="w-full text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
-        <option value="">— Sin asignar —</option>
-        {% for emp in employees %}
-            <option value="{{ emp.pk }}" {% if assignment and assignment.employee_id == emp.pk %}selected{% endif %}>
-                {{ emp.get_full_name|default:emp.username }}
-            </option>
-        {% endfor %}
-    </select>
-    <span id="cell-spinner-{{ date|date:'Y-m-d' }}-{{ shift.id }}" class="htmx-indicator block text-xs text-gray-400 mt-1">
+{% shift_theme shift.name as theme %}
+<div id="cell-{{ date|date:'Y-m-d' }}-{{ shift.id }}"
+     class="rounded-xl border {{ theme.border }} {{ theme.bg }} p-2"
+     {% if is_admin_user %}x-data="{ editing: false }"{% endif %}>
+
+    <!-- Encabezado del turno: ícono + nombre + horario, en el color del tema -->
+    <div class="flex items-center gap-1.5 mb-1.5 px-0.5">
+        {% if theme.icon == 'sun' %}
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 {{ theme.text }}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+            </svg>
+        {% elif theme.icon == 'moon' %}
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 {{ theme.text }}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+            </svg>
+        {% else %}
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 {{ theme.text }}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+        {% endif %}
+        <span class="text-xs font-bold {{ theme.text }} uppercase tracking-wide">{{ shift.name }}</span>
+        <span class="text-xs {{ theme.text }} opacity-70 ml-auto">{{ shift.start_time|time:"g:i A" }}–{{ shift.end_time|time:"g:i A" }}</span>
+    </div>
+
+    {% if is_admin_user %}
+        <button type="button" x-show="!editing" @click="editing = true"
+                class="w-full flex items-center gap-2 rounded-lg px-1.5 py-1.5 text-left hover:bg-white/70 transition-colors group cursor-pointer">
+            {% if assignment %}
+                {% avatar_theme assignment.employee as avatar %}
+                <span class="flex-shrink-0 w-7 h-7 rounded-full {{ avatar.bg }} {{ avatar.text }} flex items-center justify-center text-xs font-bold">
+                    {{ assignment.employee|initials }}
+                </span>
+                <span class="text-sm font-medium text-gray-800 truncate">{{ assignment.employee.get_full_name|default:assignment.employee.username }}</span>
+            {% else %}
+                <span class="flex-shrink-0 w-7 h-7 rounded-full border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-400">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                </span>
+                <span class="text-sm text-gray-400 italic">Sin asignar</span>
+            {% endif %}
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 ml-auto text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+        </button>
+
+        <select name="employee"
+                x-ref="select"
+                x-show="editing" x-cloak
+                x-effect="editing && $nextTick(() => { $refs.select.focus(); $refs.select.showPicker && $refs.select.showPicker(); })"
+                @click.outside="editing = false"
+                @keydown.escape="editing = false"
+                hx-post="{% url 'schedules:assignment_update' date|date:'Y-m-d' shift.id %}"
+                hx-trigger="change"
+                hx-target="#cell-{{ date|date:'Y-m-d' }}-{{ shift.id }}"
+                hx-swap="outerHTML"
+                hx-indicator="#cell-spinner-{{ date|date:'Y-m-d' }}-{{ shift.id }}"
+                class="w-full text-sm font-medium rounded-lg border-2 {{ theme.border }} bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none py-1.5 px-2">
+            <option value="">— Sin asignar —</option>
+            {% for emp in employees %}
+                <option value="{{ emp.pk }}" {% if assignment and assignment.employee_id == emp.pk %}selected{% endif %}>
+                    {{ emp.get_full_name|default:emp.username }}
+                </option>
+            {% endfor %}
+        </select>
+    {% else %}
+        <div class="flex items-center gap-2 px-1.5 py-1.5">
+            {% if assignment %}
+                {% avatar_theme assignment.employee as avatar %}
+                <span class="flex-shrink-0 w-7 h-7 rounded-full {{ avatar.bg }} {{ avatar.text }} flex items-center justify-center text-xs font-bold">
+                    {{ assignment.employee|initials }}
+                </span>
+                <span class="text-sm font-medium text-gray-800 truncate">{{ assignment.employee.get_full_name|default:assignment.employee.username }}</span>
+            {% else %}
+                <span class="text-sm text-gray-400 italic">Sin asignar</span>
+            {% endif %}
+        </div>
+    {% endif %}
+
+    <span id="cell-spinner-{{ date|date:'Y-m-d' }}-{{ shift.id }}" class="htmx-indicator flex items-center gap-1.5 text-xs text-gray-500 mt-1 px-1.5">
+        <svg class="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
         Guardando…
     </span>
     {% if error %}
-        <p class="text-xs text-red-600 mt-1">{{ error }}</p>
+        <p class="text-xs text-red-600 mt-1 px-1.5">{{ error }}</p>
     {% endif %}
-</td>
+</div>

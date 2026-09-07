@@ -1,5 +1,5 @@
 {% extends 'base/base.html' %}
-{% load l10n %}
+{% load schedules_extras %}
 
 {% block title %}Horarios - Sistema de Bodega{% endblock %}
 
@@ -11,7 +11,7 @@
             <h1 class="text-xl sm:text-2xl font-bold text-gray-800">Planilla de Turnos</h1>
             <p class="text-sm text-gray-600 mt-1">
                 {% if is_admin_user %}
-                    Asigná quién cubre cada turno. Los cambios se guardan solos al elegir un empleado.
+                    Tocá un turno para asignar quién lo cubre. Se guarda solo, sin recargar la página.
                 {% else %}
                     Consultá quién cubre cada turno y tus próximos días libres.
                 {% endif %}
@@ -38,70 +38,57 @@
 
 <!-- NAVEGACIÓN DE SEMANA -->
 <div class="bg-white rounded-lg shadow-md p-4 mb-4 sm:mb-6 flex items-center justify-between">
-    <a href="?week={{ prev_week|date:'Y-m-d' }}" class="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-800">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <a href="?week={{ prev_week|date:'Y-m-d' }}" class="inline-flex items-center justify-center h-10 w-10 sm:w-auto sm:px-3 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-blue-700 transition-colors">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 sm:mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
         </svg>
-        <span class="hidden sm:inline">Semana anterior</span>
+        <span class="hidden sm:inline">Anterior</span>
     </a>
     <div class="text-center">
-        <p class="font-semibold text-gray-800">{{ monday|date:"d/m/Y" }} — {{ sunday|date:"d/m/Y" }}</p>
+        <p class="font-bold text-gray-800 text-base sm:text-lg">{{ monday|date:"d/m" }} — {{ sunday|date:"d/m/Y" }}</p>
         {% if monday != current_week %}
-            <a href="?week={{ current_week|date:'Y-m-d' }}" class="text-xs text-blue-600 hover:underline">Volver a esta semana</a>
+            <a href="?week={{ current_week|date:'Y-m-d' }}" class="text-xs font-medium text-blue-600 hover:underline">Volver a esta semana</a>
+        {% else %}
+            <p class="text-xs text-gray-400">Semana actual</p>
         {% endif %}
     </div>
-    <a href="?week={{ next_week|date:'Y-m-d' }}" class="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-800">
-        <span class="hidden sm:inline">Semana siguiente</span>
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <a href="?week={{ next_week|date:'Y-m-d' }}" class="inline-flex items-center justify-center h-10 w-10 sm:w-auto sm:px-3 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-blue-700 transition-colors">
+        <span class="hidden sm:inline">Siguiente</span>
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 sm:ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
         </svg>
     </a>
 </div>
 
-<!-- PLANILLA -->
-<div class="bg-white rounded-lg shadow-md overflow-hidden mb-4 sm:mb-6">
-    <div class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-gray-200">
-            <thead class="bg-gray-50">
-                <tr>
-                    <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Día</th>
-                    {% for shift in shifts %}
-                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            {{ shift.name }}
-                            <span class="block normal-case font-normal text-gray-400">
-                                {{ shift.start_time|time:"h:i A" }}–{{ shift.end_time|time:"h:i A" }}
-                            </span>
-                        </th>
-                    {% endfor %}
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-100">
-                {% for row in rows %}
-                <tr class="{% if row.date == today %}bg-blue-50{% endif %}">
-                    <td class="px-3 py-2 text-sm font-medium text-gray-700 whitespace-nowrap">
-                        {{ row.date|date:"D d/m" }}
-                        {% if row.date == today %}
-                            <span class="ml-1 px-1.5 py-0.5 inline-flex text-xs font-semibold rounded bg-blue-100 text-blue-800">Hoy</span>
-                        {% endif %}
-                    </td>
-                    {% for cell in row.cells %}
-                        {% if is_admin_user %}
-                            {% include 'schedules/partials/_shift_cell.html' with shift=cell.shift date=row.date assignment=cell.assignment %}
-                        {% else %}
-                            <td class="px-3 py-2 text-sm text-gray-700">
-                                {% if cell.assignment %}
-                                    {{ cell.assignment.employee.get_full_name|default:cell.assignment.employee.username }}
-                                {% else %}
-                                    <span class="text-gray-400">—</span>
-                                {% endif %}
-                            </td>
-                        {% endif %}
-                    {% endfor %}
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+<!-- PLANILLA: tarjeta por día, con los turnos del día dentro -->
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-3 mb-4 sm:mb-6">
+    {% for row in rows %}
+    <div class="bg-white rounded-xl shadow-md overflow-hidden {% if row.date == today %}ring-2 ring-blue-400{% endif %}">
+        <!-- Encabezado del día -->
+        <div class="px-3 py-2.5 border-b border-gray-100 {% if row.date == today %}bg-blue-50{% else %}bg-gray-50{% endif %}">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-semibold uppercase tracking-wide {% if row.date == today %}text-blue-700{% else %}text-gray-500{% endif %}">
+                        {{ row.date|date:"D" }}
+                    </p>
+                    <p class="text-lg font-bold {% if row.date == today %}text-blue-800{% else %}text-gray-800{% endif %} leading-tight">
+                        {{ row.date|date:"d/m" }}
+                    </p>
+                </div>
+                {% if row.date == today %}
+                    <span class="px-2 py-0.5 rounded-full bg-blue-600 text-white text-xs font-bold">Hoy</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Turnos del día -->
+        <div class="p-2 space-y-2">
+            {% for cell in row.cells %}
+                {% include 'schedules/partials/_shift_cell.html' with shift=cell.shift date=row.date assignment=cell.assignment %}
+            {% endfor %}
+        </div>
     </div>
+    {% endfor %}
 </div>
 
 <!-- PRÓXIMOS DÍAS LIBRES -->
@@ -117,17 +104,23 @@
     {% if upcoming_exceptions %}
         <ul class="divide-y divide-gray-100">
             {% for exception in upcoming_exceptions %}
-                <li class="py-2 flex items-center justify-between text-sm">
-                    <div>
-                        {% if is_admin_user %}
-                            <span class="font-medium text-gray-800">{{ exception.employee.get_full_name|default:exception.employee.username }}</span> —
-                        {% endif %}
-                        <span class="text-gray-600">{{ exception.get_exception_type_display }}</span>
-                        <span class="text-gray-400">({{ exception.date_start|date:"d/m/Y" }} a {{ exception.date_end|date:"d/m/Y" }})</span>
-                        {% if exception.reason %}
-                            <span class="text-gray-400 italic">— {{ exception.reason }}</span>
-                        {% endif %}
-                    </div>
+                {% exception_theme exception.exception_type as extheme %}
+                <li class="py-2.5 flex items-center gap-3 text-sm">
+                    <span class="flex-shrink-0 w-2 h-2 rounded-full {{ extheme.dot }}"></span>
+                    {% if is_admin_user %}
+                        {% avatar_theme exception.employee as avatar %}
+                        <span class="flex-shrink-0 w-6 h-6 rounded-full {{ avatar.bg }} {{ avatar.text }} flex items-center justify-center text-[10px] font-bold">
+                            {{ exception.employee|initials }}
+                        </span>
+                        <span class="font-medium text-gray-800">{{ exception.employee.get_full_name|default:exception.employee.username }}</span>
+                    {% endif %}
+                    <span class="px-2 py-0.5 rounded-full {{ extheme.bg }} {{ extheme.text }} text-xs font-medium">
+                        {{ exception.get_exception_type_display }}
+                    </span>
+                    <span class="text-gray-500">{{ exception.date_start|date:"d/m/Y" }} a {{ exception.date_end|date:"d/m/Y" }}</span>
+                    {% if exception.reason %}
+                        <span class="text-gray-400 italic truncate">— {{ exception.reason }}</span>
+                    {% endif %}
                 </li>
             {% endfor %}
         </ul>
