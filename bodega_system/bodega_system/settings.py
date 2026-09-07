@@ -56,6 +56,7 @@ INSTALLED_APPS = [
     'finances',
     'utils',
     'performance',
+    'schedules',
 ]
 
 MIDDLEWARE = [

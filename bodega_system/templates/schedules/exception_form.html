@@ -1,0 +1,68 @@
+{% extends 'base/base.html' %}
+
+{% block title %}Nuevo Día Libre - Sistema de Bodega{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    <div class="bg-white rounded-lg shadow-md p-6">
+        <h1 class="text-xl font-bold text-gray-800 mb-1">Registrar Día Libre</h1>
+        <p class="text-sm text-gray-600 mb-6">
+            Vacaciones, permiso, enfermedad u otro motivo — siempre día(s) completo(s).
+        </p>
+
+        <form method="post" class="space-y-4">
+            {% csrf_token %}
+
+            <div class="form-group">
+                <label for="{{ form.employee.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-2">Empleado *</label>
+                {{ form.employee }}
+                {% if form.employee.errors %}
+                    <p class="mt-1 text-sm text-red-600">{{ form.employee.errors.0 }}</p>
+                {% endif %}
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div class="form-group">
+                    <label for="{{ form.date_start.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-2">Desde *</label>
+                    {{ form.date_start }}
+                    {% if form.date_start.errors %}
+                        <p class="mt-1 text-sm text-red-600">{{ form.date_start.errors.0 }}</p>
+                    {% endif %}
+                </div>
+                <div class="form-group">
+                    <label for="{{ form.date_end.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-2">Hasta *</label>
+                    {{ form.date_end }}
+                    {% if form.date_end.errors %}
+                        <p class="mt-1 text-sm text-red-600">{{ form.date_end.errors.0 }}</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="{{ form.exception_type.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-2">Tipo *</label>
+                {{ form.exception_type }}
+                {% if form.exception_type.errors %}
+                    <p class="mt-1 text-sm text-red-600">{{ form.exception_type.errors.0 }}</p>
+                {% endif %}
+            </div>
+
+            <div class="form-group">
+                <label for="{{ form.reason.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-2">Detalle (opcional)</label>
+                {{ form.reason }}
+                {% if form.reason.errors %}
+                    <p class="mt-1 text-sm text-red-600">{{ form.reason.errors.0 }}</p>
+                {% endif %}
+            </div>
+
+            <div class="flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-200">
+                <a href="{% url 'schedules:exception_list' %}" class="flex-1 text-center py-2.5 px-4 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium text-sm">
+                    Cancelar
+                </a>
+                <button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-4 rounded-md text-sm">
+                    Guardar
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

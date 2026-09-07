@@ -1,0 +1,138 @@
+{% extends 'base/base.html' %}
+{% load l10n %}
+
+{% block title %}Horarios - Sistema de Bodega{% endblock %}
+
+{% block content %}
+<!-- HEADER -->
+<div class="bg-white rounded-lg shadow-md p-4 sm:p-6 mb-4 sm:mb-6">
+    <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+        <div>
+            <h1 class="text-xl sm:text-2xl font-bold text-gray-800">Planilla de Turnos</h1>
+            <p class="text-sm text-gray-600 mt-1">
+                {% if is_admin_user %}
+                    Asigná quién cubre cada turno. Los cambios se guardan solos al elegir un empleado.
+                {% else %}
+                    Consultá quién cubre cada turno y tus próximos días libres.
+                {% endif %}
+            </p>
+        </div>
+        {% if is_admin_user %}
+        <div class="flex flex-col sm:flex-row gap-2 sm:gap-3">
+            <a href="{% url 'schedules:exception_create' %}" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-4 rounded-md inline-flex items-center justify-center min-h-[44px] transition-colors text-sm w-full sm:w-auto">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 sm:h-5 sm:w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+                <span>Nuevo Día Libre</span>
+            </a>
+            <a href="{% url 'schedules:shift_list' %}" class="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium py-2.5 px-4 rounded-md inline-flex items-center justify-center min-h-[44px] transition-colors text-sm w-full sm:w-auto">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 sm:h-5 sm:w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>Editar Turnos</span>
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- NAVEGACIÓN DE SEMANA -->
+<div class="bg-white rounded-lg shadow-md p-4 mb-4 sm:mb-6 flex items-center justify-between">
+    <a href="?week={{ prev_week|date:'Y-m-d' }}" class="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-800">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+        </svg>
+        <span class="hidden sm:inline">Semana anterior</span>
+    </a>
+    <div class="text-center">
+        <p class="font-semibold text-gray-800">{{ monday|date:"d/m/Y" }} — {{ sunday|date:"d/m/Y" }}</p>
+        {% if monday != current_week %}
+            <a href="?week={{ current_week|date:'Y-m-d' }}" class="text-xs text-blue-600 hover:underline">Volver a esta semana</a>
+        {% endif %}
+    </div>
+    <a href="?week={{ next_week|date:'Y-m-d' }}" class="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-800">
+        <span class="hidden sm:inline">Semana siguiente</span>
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+        </svg>
+    </a>
+</div>
+
+<!-- PLANILLA -->
+<div class="bg-white rounded-lg shadow-md overflow-hidden mb-4 sm:mb-6">
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Día</th>
+                    {% for shift in shifts %}
+                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            {{ shift.name }}
+                            <span class="block normal-case font-normal text-gray-400">
+                                {{ shift.start_time|time:"h:i A" }}–{{ shift.end_time|time:"h:i A" }}
+                            </span>
+                        </th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+                {% for row in rows %}
+                <tr class="{% if row.date == today %}bg-blue-50{% endif %}">
+                    <td class="px-3 py-2 text-sm font-medium text-gray-700 whitespace-nowrap">
+                        {{ row.date|date:"D d/m" }}
+                        {% if row.date == today %}
+                            <span class="ml-1 px-1.5 py-0.5 inline-flex text-xs font-semibold rounded bg-blue-100 text-blue-800">Hoy</span>
+                        {% endif %}
+                    </td>
+                    {% for cell in row.cells %}
+                        {% if is_admin_user %}
+                            {% include 'schedules/partials/_shift_cell.html' with shift=cell.shift date=row.date assignment=cell.assignment %}
+                        {% else %}
+                            <td class="px-3 py-2 text-sm text-gray-700">
+                                {% if cell.assignment %}
+                                    {{ cell.assignment.employee.get_full_name|default:cell.assignment.employee.username }}
+                                {% else %}
+                                    <span class="text-gray-400">—</span>
+                                {% endif %}
+                            </td>
+                        {% endif %}
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- PRÓXIMOS DÍAS LIBRES -->
+<div class="bg-white rounded-lg shadow-md p-4 sm:p-6">
+    <div class="flex justify-between items-center mb-4">
+        <h2 class="text-lg font-semibold text-gray-800">
+            {% if is_admin_user %}Próximos días libres{% else %}Mis próximos días libres{% endif %}
+        </h2>
+        {% if is_admin_user %}
+            <a href="{% url 'schedules:exception_list' %}" class="text-sm text-blue-600 hover:underline">Ver todos</a>
+        {% endif %}
+    </div>
+    {% if upcoming_exceptions %}
+        <ul class="divide-y divide-gray-100">
+            {% for exception in upcoming_exceptions %}
+                <li class="py-2 flex items-center justify-between text-sm">
+                    <div>
+                        {% if is_admin_user %}
+                            <span class="font-medium text-gray-800">{{ exception.employee.get_full_name|default:exception.employee.username }}</span> —
+                        {% endif %}
+                        <span class="text-gray-600">{{ exception.get_exception_type_display }}</span>
+                        <span class="text-gray-400">({{ exception.date_start|date:"d/m/Y" }} a {{ exception.date_end|date:"d/m/Y" }})</span>
+                        {% if exception.reason %}
+                            <span class="text-gray-400 italic">— {{ exception.reason }}</span>
+                        {% endif %}
+                    </div>
+                </li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p class="text-sm text-gray-500">No hay días libres próximos registrados.</p>
+    {% endif %}
+</div>
+{% endblock %}

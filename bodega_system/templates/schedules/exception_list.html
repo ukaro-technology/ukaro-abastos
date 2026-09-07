@@ -1,0 +1,84 @@
+{% extends 'base/base.html' %}
+
+{% block title %}Días Libres - Sistema de Bodega{% endblock %}
+
+{% block content %}
+<div class="bg-white rounded-lg shadow-md p-4 sm:p-6 mb-4 sm:mb-6">
+    <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+        <div>
+            <h1 class="text-xl sm:text-2xl font-bold text-gray-800">Días Libres</h1>
+            <p class="text-sm text-gray-600 mt-1">
+                {% if is_admin_user %}
+                    Vacaciones, permisos y enfermedad registrados para todos los empleados.
+                {% else %}
+                    Tus días libres registrados.
+                {% endif %}
+            </p>
+        </div>
+        <div class="flex gap-2">
+            <a href="{% url 'schedules:week_view' %}" class="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium py-2.5 px-4 rounded-md inline-flex items-center justify-center min-h-[44px] transition-colors text-sm">
+                Ver planilla
+            </a>
+            {% if is_admin_user %}
+            <a href="{% url 'schedules:exception_create' %}" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-4 rounded-md inline-flex items-center justify-center min-h-[44px] transition-colors text-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+                Nuevo
+            </a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="bg-white rounded-lg shadow-md overflow-hidden">
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    {% if is_admin_user %}
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Empleado</th>
+                    {% endif %}
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Desde</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Hasta</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Detalle</th>
+                    {% if is_admin_user %}
+                        <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+                    {% endif %}
+                </tr>
+            </thead>
+            <tbody id="exceptions-body" class="bg-white divide-y divide-gray-200">
+                {% for exception in exceptions %}
+                <tr id="exception-row-{{ exception.pk }}">
+                    {% if is_admin_user %}
+                        <td class="px-4 py-3 text-sm text-gray-900">{{ exception.employee.get_full_name|default:exception.employee.username }}</td>
+                    {% endif %}
+                    <td class="px-4 py-3 text-sm text-gray-700">{{ exception.get_exception_type_display }}</td>
+                    <td class="px-4 py-3 text-sm text-gray-700">{{ exception.date_start|date:"d/m/Y" }}</td>
+                    <td class="px-4 py-3 text-sm text-gray-700">{{ exception.date_end|date:"d/m/Y" }}</td>
+                    <td class="px-4 py-3 text-sm text-gray-500">{{ exception.reason|default:"—" }}</td>
+                    {% if is_admin_user %}
+                        <td class="px-4 py-3 text-center">
+                            <button hx-delete="{% url 'schedules:exception_delete' exception.pk %}"
+                                    hx-target="#exception-row-{{ exception.pk }}"
+                                    hx-swap="outerHTML swap:300ms"
+                                    hx-confirm="¿Eliminar este día libre de {{ exception.employee.get_full_name|default:exception.employee.username }}?"
+                                    class="text-red-600 hover:text-red-800 text-sm font-medium">
+                                Eliminar
+                            </button>
+                        </td>
+                    {% endif %}
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="{% if is_admin_user %}6{% else %}4{% endif %}" class="px-4 py-6 text-center text-sm text-gray-500">
+                        No hay días libres registrados.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

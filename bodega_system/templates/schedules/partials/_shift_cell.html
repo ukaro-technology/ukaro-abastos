@@ -1,0 +1,28 @@
+{% comment %}
+Celda editable de la planilla — un (fecha, turno). Se usa tanto en el render inicial de
+week_view.html (vía {% include %}) como en la respuesta del endpoint HTMX que asigna/desasigna
+un empleado (schedules:assignment_update), que devuelve exactamente este mismo partial para
+reemplazar la celda sin recargar la página completa.
+{% endcomment %}
+<td id="cell-{{ date|date:'Y-m-d' }}-{{ shift.id }}" class="px-2 py-2 align-top">
+    <select name="employee"
+            hx-post="{% url 'schedules:assignment_update' date|date:'Y-m-d' shift.id %}"
+            hx-trigger="change"
+            hx-target="#cell-{{ date|date:'Y-m-d' }}-{{ shift.id }}"
+            hx-swap="outerHTML"
+            hx-indicator="#cell-spinner-{{ date|date:'Y-m-d' }}-{{ shift.id }}"
+            class="w-full text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+        <option value="">— Sin asignar —</option>
+        {% for emp in employees %}
+            <option value="{{ emp.pk }}" {% if assignment and assignment.employee_id == emp.pk %}selected{% endif %}>
+                {{ emp.get_full_name|default:emp.username }}
+            </option>
+        {% endfor %}
+    </select>
+    <span id="cell-spinner-{{ date|date:'Y-m-d' }}-{{ shift.id }}" class="htmx-indicator block text-xs text-gray-400 mt-1">
+        Guardando…
+    </span>
+    {% if error %}
+        <p class="text-xs text-red-600 mt-1">{{ error }}</p>
+    {% endif %}
+</td>

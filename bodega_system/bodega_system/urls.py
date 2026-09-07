@@ -26,6 +26,7 @@ urlpatterns = [
     path('finances/', include('finances.urls')),
     path('utils/', include('utils.urls')),
     path('performance/', include('performance.urls')),
+    path('schedules/', include('schedules.urls')),
     
     # ⭐ NUEVA SECCIÓN: APIs consolidadas
     path('api/', include('utils.api_urls')),

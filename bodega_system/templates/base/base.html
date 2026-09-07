@@ -49,6 +49,17 @@
             display: none !important;
         }
 
+        /* HTMX: indicador de carga (oculto por defecto, visible mientras la request está en
+           vuelo). Regla estándar de HTMX — primer uso real en el proyecto (schedules). */
+        .htmx-indicator {
+            opacity: 0;
+            transition: opacity 150ms ease-in;
+        }
+        .htmx-request .htmx-indicator,
+        .htmx-request.htmx-indicator {
+            opacity: 1;
+        }
+
         /* Animaciones suaves para el sidebar */
         .sidebar-transition {
             transition: transform 0.3s ease-in-out, opacity 0.3s ease-in-out;
@@ -142,6 +153,7 @@
 </head>
 
 <body class="bg-gray-50 min-h-screen flex flex-col" x-data="{ sidebarOpen: false, isMobile: window.innerWidth < 768 }"
+    hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
     @resize.window="isMobile = window.innerWidth < 768">
 
     <!-- Barra superior optimizada -->
@@ -404,6 +416,19 @@
                                         clip-rule="evenodd" />
                                 </svg>
                                 <span class="font-medium">Inventario</span>
+                            </a>
+                        </li>
+
+                        <!-- HORARIOS - Empleados y Administradores (Solo Lectura para Empleados) -->
+                        <li>
+                            <a href="{% url 'schedules:week_view' %}" @click="if (isMobile) sidebarOpen = false"
+                                class="flex items-center py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors group text-left w-full">
+                                <svg xmlns="http://www.w3.org/2000/svg"
+                                    class="h-5 w-5 mr-3 text-blue-200 group-hover:text-white flex-shrink-0"
+                                    fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                </svg>
+                                <span class="font-medium">Horarios</span>
                             </a>
                         </li>
 
