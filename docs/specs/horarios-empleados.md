@@ -1,7 +1,7 @@
 # Spec: Horarios de Empleados y Días Libres
 
 **Proyecto:** ukaro-abastos
-**Fecha:** 2026-09-05 (corregida: 2026-09-07, implementada: 2026-09-07)
+**Fecha:** 2026-09-05 (corregida: 2026-09-07, implementada: 2026-09-07, pulido visual: 2026-09-07)
 **Autor:** Claude Code (supervisado por Simón)
 **Estado:** implementada — pendiente de prueba manual de Simón/Leida (ver sección 7)
 
@@ -191,3 +191,31 @@ Decididas por Simón en esta sesión:
    (Tailwind CDN + crispy-tailwind, sin componentes cotton), así que los formularios de excepción/
    turno se hicieron como páginas completas, igual que `product_create`/`product_update` en
    `inventory`, no como modales.
+3. **Pulido visual, pedido por Simón tras probar la primera versión** ("se ve muy básico"):
+   - La planilla pasó de una tabla plana a una **grilla de tarjetas por día** (`week_view.html`),
+     una por cada día de la semana, con los dos turnos dentro de cada tarjeta — más parecido a un
+     "detalle de la semana" que a una tabla de datos.
+   - Cada turno tiene su propio tema visual (`schedules_extras.py`: `shift_theme`) — Mañana en
+     ámbar con ícono de sol, Tarde en índigo con ícono de luna — para que se distingan de un
+     vistazo, no solo por texto. Se usó color + ícono a propósito (no solo color), por la regla de
+     accesibilidad de no depender únicamente del color para transmitir información.
+   - El `<select>` crudo, siempre visible, que se sentía "básico", pasó a un patrón de
+     **chip + edición al hacer clic**: la celda muestra un avatar con iniciales (color
+     determinístico por empleado, mismo empleado = mismo color en toda la app) y el nombre: al
+     hacer clic se revela el `<select>` real para cambiar la asignación. Menos ruido visual
+     cuando no se está editando, sin perder la edición inline.
+   - Cada tipo de excepción (vacaciones/permiso/enfermedad/otro) tiene su propio color de badge,
+     reutilizado también como pills seleccionables en el formulario de creación (`RadioSelect` en
+     vez de `Select` — un `<select>` de 4 opciones no aportaba nada visualmente).
+   - **Bug encontrado y corregido en el camino**: al convertir `exception_type` a `RadioSelect`
+     apareció una 5ta opción en blanco no pedida — Django agrega automáticamente un choice vacío
+     a un campo con `choices` cuando el modelo no tiene `default` ni se pasa `initial`
+     (`Field.formfield()`, `include_blank = self.blank or not self.has_default()`). Corregido
+     fijando `self.fields['exception_type'].choices` explícitamente en el `__init__` del form a
+     los 4 valores reales del modelo.
+   - Verificado con requests HTTP reales contra el servidor local (login + HTMX) que el nuevo
+     partial de celda renderiza y actualiza correctamente tras asignar un empleado — mismo límite
+     que el resto de la sesión: sin extensión de Chrome conectada, no se vio el resultado con los
+     propios ojos en un navegador real.
+   - 494 tests totales tras el pulido (sin tests nuevos — es un cambio puramente visual sobre
+     vistas ya cubiertas), mismas 9 failures + 6 errors preexistentes, cero regresiones.
