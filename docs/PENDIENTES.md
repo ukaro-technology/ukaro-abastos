@@ -1,28 +1,46 @@
 # Pendientes — Ukaro Abastos
 
 ## Decisiones activas
-- **EN BORRADOR (2026-09-05/07) — Spec "Horarios de Empleados y Días Libres"**
+- **COMPLETADO (2026-09-07) — Spec "Horarios de Empleados y Días Libres", implementada.**
   (`docs/specs/horarios-empleados.md`). Pedido de Simón, tarea anotada en Platform ("Horario de
-  empleados y días libres"). Todas las decisiones de diseño ya cerradas con Simón — **falta su
-  aprobación final para empezar a implementar** (todavía no se escribió una sola línea de código).
+  empleados y días libres"). App nueva `schedules`, 32 tests nuevos en verde, 0 regresiones
+  (suite completa: 494 tests, mismas 9 failures + 6 errors preexistentes de siempre).
   - Alcance: planilla de turnos + días libres puntuales — explícitamente NO es fichaje (sin
     entrada/salida marcada, sin cálculo de horas), y NO restringe el acceso al sistema en día
     libre (es informativo, no un candado).
-  - **Hallazgo real que corrigió el diseño a mitad de sesión:** el diseño original asumía un
-    "horario semanal recurrente por empleado" (ej. "Juan siempre lunes a sábado 7am-3pm"), pero
-    Leida tiene solo 2 empleados que **rotan entre turno mañana y turno tarde sin un patrón
-    semanal fijo** (un día uno hace mañana, al otro puede ser al revés). Un horario recurrente no
-    puede representar eso. Corregido a un modelo de **planilla de asignación de turnos** (`Turno`
-    fijo con horario editable + `AsignacionDeTurno` día×turno→empleado) — Leida asigna día a día
-    o semana a semana, sin mantener sincronizada ninguna plantilla.
-  - App nueva `schedules` (no dentro de `accounts`), turnos fijos editables (Mañana 7am-3pm /
-    Tarde 1pm-9pm, seedeados por data migration), excepciones de día completo únicamente (sin
-    medio día) con categorías fijas + texto libre opcional, tabla simple (sin calendario visual —
-    decisión explícita de Simón, el calendario visual queda para una iteración futura), validación
-    que impide asignar un turno a un empleado en una fecha donde tiene una excepción activa.
-  - Solo Leida (admin) edita la planilla y las excepciones; el empleado ve de solo lectura la
-    planilla y sus propios días libres.
-  - **Pendiente, bloqueante:** aprobación final de Simón antes de escribir el modelo/migraciones.
+  - **Hallazgo real que corrigió el diseño a mitad de sesión (antes de programar):** el diseño
+    original asumía un "horario semanal recurrente por empleado" (ej. "Juan siempre lunes a
+    sábado 7am-3pm"), pero Leida tiene solo 2 empleados que **rotan entre turno mañana y turno
+    tarde sin un patrón semanal fijo** (un día uno hace mañana, al otro puede ser al revés). Un
+    horario recurrente no puede representar eso. Corregido a un modelo de **planilla de
+    asignación de turnos**: `Shift` (Mañana 7am-3pm / Tarde 1pm-9pm, fijo pero editable, seedeado
+    por data migration) + `ShiftAssignment` (día×turno→empleado, `unique_together`) — Leida
+    asigna día a día o semana a semana, sin mantener sincronizada ninguna plantilla.
+  - `ScheduleException` para días libres/vacaciones/permisos/enfermedad — día completo únicamente,
+    categorías fijas + texto libre opcional. Validación en `ShiftAssignment.clean()`: no se puede
+    asignar un turno a un empleado con excepción activa esa fecha. Al revés (crear una excepción
+    sobre un rango que ya tenía turnos asignados) **no bloquea** — solo avisa con un mensaje para
+    que Leida reasigne esos turnos (decisión tomada durante la implementación, no en la spec
+    original).
+  - Solo Leida (admin) edita la planilla, los turnos y las excepciones (`admin_required`); el
+    empleado ve de solo lectura la planilla semanal (`?week=YYYY-MM-DD` para navegar) y sus
+    propios días libres. Tabla simple, sin calendario visual (decisión explícita de Simón, queda
+    como iteración futura).
+  - **Primer uso real de HTMX en todo el proyecto** — la planilla editable usa un `<select>` por
+    celda con `hx-post`/`hx-trigger="change"`/`hx-swap="outerHTML"`, sin JS inline. El paquete y
+    el script CDN ya estaban instalados pero nunca se habían usado: hubo que agregar la regla CSS
+    `.htmx-indicator` (estándar de HTMX, no existía) y `hx-headers` con el token CSRF en
+    `<body>` de `base.html` — sin esto cualquier `hx-post`/`hx-delete` fallaba con 403. También se
+    confirmó que el patrón de modal de la skill `htmx-patterns` (`<c-ukaro.overlay.modal>`) no
+    aplica acá — este proyecto no usa `ukaro-ui`; los formularios quedaron como páginas completas,
+    igual que el resto del sistema (`product_create`, etc.).
+  - Verificado el endpoint HTMX end-to-end con requests HTTP reales (login + POST con header
+    `X-CSRFToken` contra el servidor local: asignar, reasignar, desasignar). **Sin verificación
+    visual con navegador real** — la extensión de Chrome no estaba conectada esta sesión, así que
+    no se confirmó con los propios ojos que el `<select>` dispara el cambio correctamente en un
+    navegador de verdad (el contrato HTTP/HTML está confirmado correcto).
+  - **Pendiente, no bloqueante:** prueba manual de Simón/Leida en navegador real antes de
+    considerar el ciclo cerrado del todo.
 - **COMPLETADO (2026-08-17) — Calculadora integrada en el navbar + spec de "Precios Estables en Bs".**
   - **Calculadora:** botón en el header (visible para todo usuario autenticado, todas las vistas),
     panel con dos pestañas — calculadora básica de 4 operaciones, y conversor "USD físico → BCV"

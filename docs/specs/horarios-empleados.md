@@ -1,9 +1,9 @@
 # Spec: Horarios de Empleados y Días Libres
 
 **Proyecto:** ukaro-abastos
-**Fecha:** 2026-09-05 (corregida: 2026-09-07)
+**Fecha:** 2026-09-05 (corregida: 2026-09-07, implementada: 2026-09-07)
 **Autor:** Claude Code (supervisado por Simón)
-**Estado:** borrador — pendiente de aprobación final de Simón
+**Estado:** implementada — pendiente de prueba manual de Simón/Leida (ver sección 7)
 
 ## 1. Outcome (Resultado esperado)
 
@@ -125,40 +125,69 @@ Decididas por Simón en esta sesión:
    rotan entre los turnos mañana/tarde sin un patrón fijo semanal (hallazgo real que corrigió el
    diseño original de esta spec, ver sección 2 y 3).
 
-## 6. Tasks (implementación — a ejecutar solo después de aprobación)
+## 6. Tasks (implementación)
 
-1. [ ] Crear app nueva `schedules`, registrarla en `INSTALLED_APPS`.
-2. [ ] Modelo `Shift` (Turno): `name`, `start_time`, `end_time` + `HistoricalRecords()`. Data
-   migration que crea los 2 turnos iniciales (Mañana 7:00-15:00, Tarde 13:00-21:00).
-3. [ ] Modelo `ShiftAssignment` (AsignacionDeTurno): `date`, `shift` (FK), `employee` (FK a
-   `accounts.User`), `unique_together` en (`date`, `shift`) — un solo empleado por turno por día.
-   + `HistoricalRecords()`.
-4. [ ] Modelo `ScheduleException` (ExcepcionDeHorario): `employee`, `date_start`, `date_end`,
-   `exception_type` (choices), `reason` (texto libre opcional) + `HistoricalRecords()`.
-5. [ ] Validación: no permitir crear/editar una `ShiftAssignment` para un empleado en una fecha
-   cubierta por una `ScheduleException` activa de ese mismo empleado.
-6. [ ] Migraciones.
-7. [ ] Vista admin: planilla semanal editable — tabla de 7 días × 2 turnos, edición inline por
-   celda vía HTMX (`admin_required`). Navegación entre semanas (anterior/siguiente).
-8. [ ] Vista admin: listar/crear/eliminar excepciones por empleado (`admin_required`).
-9. [ ] Vista de empleado: planilla semanal de solo lectura + sus propias excepciones próximas.
-10. [ ] Templates (Tailwind, HTMX/Alpine sin JS inline, siguiendo convenciones del resto del
-    sistema).
-11. [ ] Entrada de menú en la navegación (`base.html`) visible según rol.
-12. [ ] Tests: modelos (`unique_together`, validación de excepción vs. asignación), vistas
-    (permisos admin vs. empleado), edición inline vía HTMX.
-13. [ ] Actualizar `docs/PENDIENTES.md` al cerrar.
+1. [x] App nueva `schedules`, registrada en `INSTALLED_APPS` + URL raíz `schedules/`.
+2. [x] Modelo `Shift` (Turno): `name`, `start_time`, `end_time` + `HistoricalRecords()`. Data
+   migration (`0002_seed_default_shifts`) que crea Mañana (7:00-15:00) y Tarde (13:00-21:00).
+3. [x] Modelo `ShiftAssignment`: `date`, `shift` (FK), `employee` (FK a `accounts.User`),
+   `unique_together` en (`date`, `shift`) + `HistoricalRecords()`.
+4. [x] Modelo `ScheduleException`: `employee`, `date_start`, `date_end`, `exception_type`
+   (choices: vacaciones/permiso/enfermedad/otro), `reason` (texto libre opcional),
+   `created_by` + `HistoricalRecords()`.
+5. [x] Validación en `ShiftAssignment.clean()`: rechaza asignar un turno a un empleado en una
+   fecha cubierta por una `ScheduleException` suya. De paso, `ScheduleException` creada sobre un
+   rango con asignaciones existentes **no bloquea** — avisa con `messages.warning()` (no estaba
+   en la spec original, ver sección 9.1).
+6. [x] Migraciones (`0001_initial`, `0002_seed_default_shifts`).
+7. [x] Vista admin: planilla semanal editable (`week_view`) — tabla de días × turnos, cada celda
+   es un `<select>` con `hx-post`/`hx-trigger="change"` que swappea solo esa celda
+   (`hx-swap="outerHTML"`), sin recargar la página. Navegación `?week=YYYY-MM-DD` (anterior/
+   siguiente/volver a hoy).
+8. [x] Vista admin: `exception_list` (listar, admin ve todas), `exception_create` (form
+   completo), `exception_delete` (HTMX `hx-delete`, animación de fila, sin modal — ver sección
+   9.2). `shift_list`/`shift_update` para editar el horario de los turnos fijos.
+9. [x] Vista de empleado: misma `week_view` en modo solo lectura (texto plano, sin `<select>`) +
+   `exception_list` filtrada a `request.user`.
+10. [x] Templates Tailwind, HTMX declarativo (sin `on*` inline), siguiendo la convención real del
+    proyecto (formularios de página completa, no modal — ver sección 9.2).
+11. [x] Entrada "Horarios" en `base.html`, visible para admin y empleado (mismo lugar que
+    "Inventario").
+12. [x] 32 tests nuevos en `schedules`: modelos, `unique_together`, validación de conflicto,
+    permisos por vista, endpoint HTMX de asignación (asignar/reasignar/desasignar/bloqueo por
+    excepción), excepciones (crear/listar/eliminar/aviso de conflicto), edición de turnos.
+13. [ ] Actualizar `docs/PENDIENTES.md` al cerrar (pendiente, se hace al final de esta sesión).
 
-## 7. Verification (cómo verificar antes de dar por cerrada la spec)
+## 7. Verification
 
-- [ ] Tests pasan (`python manage.py test`), sin regresiones sobre el baseline conocido.
-- [ ] Prueba manual: Leida arma la planilla de una semana real con sus dos empleados rotando entre
-  mañana y tarde (incluyendo un día donde cambian respecto al día anterior) y la ve reflejada
-  correctamente.
-- [ ] Prueba manual: Leida marca un día libre puntual para un empleado (ej. una semana de
-  vacaciones) y confirma que no se lo puede asignar a un turno esos días (validación) y que la
-  excepción aparece en su vista propia.
-- [ ] Prueba manual: el empleado con día libre puede seguir logueándose y operando el sistema sin
-  ningún bloqueo (confirma que la decisión de "sin restricción" quedó bien implementada).
-- [ ] Review de Simón (y de Leida, si hace falta validar el flujo desde el punto de vista de uso
-  diario).
+- [x] Tests pasan (`python manage.py test`) — 494 tests totales (+32 nuevos de esta sesión),
+  mismas 9 failures + 6 errors preexistentes que en la sesión anterior, cero regresiones nuevas.
+- [x] Verificado el endpoint HTMX end-to-end con requests HTTP reales (login real + POST con
+  header `X-CSRFToken`, contra el servidor local) — asignar, reasignar, desasignar. **Sin
+  verificación visual con navegador real**: la extensión de Chrome no estaba conectada esta
+  sesión, así que no se pudo confirmar que el `<select>` dispara `hx-trigger="change"`
+  correctamente en un navegador de verdad (el HTML/HTTP están confirmados correctos, pero el
+  comportamiento del JS de HTMX en el navegador no se vio con los propios ojos). Pendiente
+  para la próxima sesión o para cuando Simón/Leida lo prueben.
+- [ ] Prueba manual pendiente (Simón/Leida): armar la planilla de una semana real rotando entre
+  mañana y tarde, marcar un día libre y confirmar que se ve reflejado, confirmar que el empleado
+  con día libre sigue pudiendo loguearse y vender sin bloqueo.
+- [ ] Review de Simón.
+
+## 8. Notas de implementación (hallazgos durante el desarrollo, no cambian el diseño aprobado)
+
+1. **`ScheduleException` creada sobre un rango con turnos ya asignados no bloquea la creación** —
+   decisión tomada durante la implementación, no estaba en la spec original. Bloquear habría sido
+   más estricto pero más incómodo (Leida a veces va a registrar la excepción DESPUÉS de haber
+   armado la planilla). En cambio, se avisa con un mensaje ("X ya tenía turnos asignados en este
+   rango: ...") para que Leida sepa que hay que reasignar esos turnos a otra persona.
+2. **Se confirmó que HTMX nunca se había usado realmente en el proyecto** — el paquete
+   `django-htmx` y el middleware estaban instalados, el script CDN estaba cargado en `base.html`,
+   pero cero templates lo usaban. Esta es la primera feature real. Se agregó lo que faltaba para
+   que funcione: la regla CSS `.htmx-indicator` (estándar de HTMX, no existía) y `hx-headers` con
+   el token CSRF en el `<body>` (sin esto, cualquier `hx-post`/`hx-delete` habría fallado con 403
+   por falta de CSRF). También se confirmó que el patrón de modal de la skill `htmx-patterns`
+   (`<c-ukaro.overlay.modal>`) **no aplica a este proyecto** — ukaro-abastos no usa `ukaro-ui`
+   (Tailwind CDN + crispy-tailwind, sin componentes cotton), así que los formularios de excepción/
+   turno se hicieron como páginas completas, igual que `product_create`/`product_update` en
+   `inventory`, no como modales.
