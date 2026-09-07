@@ -1,15 +1,15 @@
 # Spec: Horarios de Empleados y Días Libres
 
 **Proyecto:** ukaro-abastos
-**Fecha:** 2026-09-05
+**Fecha:** 2026-09-05 (corregida: 2026-09-07)
 **Autor:** Claude Code (supervisado por Simón)
-**Estado:** borrador — pendiente de decisiones abiertas (sección 7) y aprobación de Simón
+**Estado:** borrador — pendiente de aprobación final de Simón
 
 ## 1. Outcome (Resultado esperado)
 
-Leida puede registrar el horario semanal recurrente de cada empleado (a qué hora entra y a qué
-hora sale cada día de la semana) y marcar días libres/vacaciones/permisos puntuales. Cada
-empleado puede consultar su propio horario y sus días libres registrados. Es un **calendario de
+Leida puede armar la planilla de turnos de sus dos empleados (quién cubre el turno mañana y quién
+el turno tarde en cada día) y marcar días libres/vacaciones/permisos puntuales. Cada empleado
+puede consultar la planilla y sus propios días libres. Es un **calendario/planilla de
 referencia**, no un sistema de fichaje — no calcula horas trabajadas, no bloquea el acceso al
 sistema en un día libre, y no requiere que nadie "marque entrada".
 
@@ -29,33 +29,41 @@ proyecto hoy.**
   empleado — guarda quién lo cerró (`closed_by`) pero no qué turno trabajó cada quien ese día.
 - Todas las vistas administrativas de gestión (usuarios, productos, categorías, ajustes) siguen
   el mismo patrón: `@admin_required` para crear/editar, CBV o FBV según la complejidad del CRUD,
-  templates Tailwind con Alpine para interactividad, sin JS inline.
+  templates Tailwind con Alpine/HTMX para interactividad, sin JS inline.
 
 **Consecuencia para el diseño:** esto es una feature completamente nueva, sin nada que migrar ni
-ningún comportamiento existente que romper — el único riesgo real de diseño es la app nueva
-tocando `accounts.User` vía `ForeignKey`, que ya es un patrón usado en todo el proyecto
-(`Sale.user`, `InventoryAdjustment.adjusted_by`, `DailyClose.closed_by`, etc.).
+ningún comportamiento existente que romper — el único punto de integración real es la app nueva
+tocando `accounts.User` vía `ForeignKey`, patrón ya usado en todo el proyecto (`Sale.user`,
+`InventoryAdjustment.adjusted_by`, `DailyClose.closed_by`, etc.).
 
 ## 3. Scope
 
 ### Incluido
 
-- **Horario semanal recurrente por empleado**: para cada uno de los 7 días de la semana, si el
-  empleado trabaja ese día y, si trabaja, hora de entrada y hora de salida (`TimeField` nativo de
-  Django — no texto ni decimales, para no repetir el bug de coma decimal con `LANGUAGE_CODE=es-ve`
-  ya visto dos veces en este proyecto con precios y con la calculadora).
-- **Excepciones puntuales** (días libres, vacaciones, permisos, enfermedad): un empleado, un rango
-  de fechas (o una sola fecha), un motivo. Mientras dura la excepción, ese empleado se considera
-  "no trabaja" esos días completos — sin importar lo que diga su horario recurrente.
+- **Turnos fijos** (`Turno`): Mañana (7:00am–3:00pm) y Tarde (1:00pm–9:00pm), definidos una vez.
+  Editable por admin por si algún día cambian los horarios — no hardcodeado en el código, para no
+  necesitar un deploy solo para ajustar una hora.
+- **Planilla de asignación de turnos** (`AsignacionDeTurno`): por cada día y cada turno, qué
+  empleado lo cubre. **Esto reemplaza la idea original de "horario semanal recurrente"** — Leida
+  aclaró que los dos empleados rotan entre mañana y tarde sin un patrón semanal fijo (un día uno
+  hace mañana y el otro tarde, al día siguiente puede ser al revés), así que un horario "plantilla
+  que se repite cada semana" no representa la realidad. Con la planilla, Leida asigna día a día (o
+  semana a semana) quién cubre cada turno — no hay que "mantener sincronizada" ninguna plantilla.
+- **Excepciones puntuales** (días libres, vacaciones, permisos, enfermedad) — `ExcepcionDeHorario`:
+  un empleado, un rango de fechas (o una sola fecha), un tipo de motivo (categoría fija +
+  texto libre opcional). Mientras dura la excepción, ese empleado se considera "no disponible" esos
+  días completos. **Validación**: no se puede asignar un empleado a un turno en una fecha donde
+  tiene una excepción activa (evita datos contradictorios en la planilla).
 - **Vista de administrador** (`admin_required`, como el resto del sistema):
-  - Editar el horario semanal de cualquier empleado.
+  - Planilla semanal editable (tabla: filas = días, columnas = Mañana/Tarde, celda = selector de
+    empleado) — edición inline vía HTMX, sin recargar la página completa por cada cambio.
   - Listar, crear y eliminar excepciones (días libres) de cualquier empleado.
-  - Vista consolidada: "quién trabaja hoy / esta semana" y "próximos días libres" de todos los
-    empleados, para que Leida planifique de un vistazo.
-- **Vista de empleado** (autenticado, filtrado a sí mismo): ver su propio horario semanal y sus
+  - La planilla semanal ES la vista consolidada — muestra a los dos empleados en los dos turnos de
+    un vistazo, no hace falta una pantalla aparte de "quién trabaja hoy".
+- **Vista de empleado** (autenticado, de solo lectura): ver la planilla de la semana y sus propias
   próximas excepciones. Sin edición.
 - Historial de cambios vía `django-simple-history` (ya usado en `Product`), para que quede
-  registro de quién cambió qué horario y cuándo — gratis, mismo patrón ya establecido.
+  registro de quién cambió qué asignación y cuándo — gratis, mismo patrón ya establecido.
 
 ### Excluido (explícitamente, no "para después" silencioso)
 
@@ -64,9 +72,9 @@ tocando `accounts.User` vía `ForeignKey`, que ya es un patrón usado en todo el
 - **Restricción de acceso al sistema en día libre** — un empleado puede loguearse y hacer ventas
   aunque el sistema diga que ese día no le toca (cubre casos reales: cubrir una emergencia,
   ayudar un rato, etc.). El horario es información, no un candado.
-- **Turnos rotativos o múltiples turnos por día** para un mismo empleado (ej. entra, sale a
-  almorzar, vuelve) — un solo rango entrada/salida por día es suficiente para el caso real de
-  Leida (turno mañana y turno tarde-noche, cada uno con su propio horario, sin partirse en dos).
+- **Calendario visual tipo grid mensual** — por ahora es una tabla simple (semanal), consistente
+  con el resto del sistema. Decisión explícita de Simón: "por ahora tabla simple, luego el
+  calendario" — queda como evolución futura, no de esta spec.
 - **Solicitud/aprobación de días libres por parte del empleado** — Leida es quien registra
   directamente las excepciones; el empleado no pide nada dentro del sistema (puede pedírselo
   a Leida por fuera, como hace hoy).
@@ -75,92 +83,81 @@ tocando `accounts.User` vía `ForeignKey`, que ya es un patrón usado en todo el
 - **Cupos o "banco de vacaciones"** (ej. "12 días de vacaciones al año") — es solo un registro
   libre de excepciones, sin contabilizar límites. Si Leida necesita eso después, es una spec
   aparte.
+- **Excepciones de medio día** (ej. "sale 2 horas antes puntualmente") — solo día completo en esta
+  versión. Decisión explícita de Simón: "día completo por ahora".
 - **Integración con nómina o pagos** — fuera de alcance total de este sistema hoy.
 
 ## 4. Constraints
 
-- Stack: Django + HTMX + Alpine.js + Tailwind (según `CLAUDE.md` del proyecto).
+- Stack: Django + HTMX + Alpine.js + Tailwind (según `CLAUDE.md` del proyecto). La planilla
+  editable es un caso natural para HTMX (edición inline por celda sin recargar la página) — mismo
+  patrón que otras partes del sistema ya resuelven así (ver skill `htmx-patterns`).
 - Single-tenant (este proyecto no tiene multi-tenant, no aplica `.for_tenant()`).
-- `USE_TZ = False` — los campos de hora (`TimeField`) no llevan timezone, consistente con el resto
-  del sistema.
-- `LANGUAGE_CODE = 'es-ve'` — cualquier campo de hora u horario mostrado en un template que se lea
-  desde JS (Alpine) debe usar `|unlocalize` si se inyecta en una expresión JS, para no repetir el
-  bug de coma decimal ya encontrado dos veces este proyecto (calculadora del navbar, conversor de
-  precios). Los `TimeField` no tienen decimales, pero si se muestra alguna duración calculada
-  (ej. horas de turno) sí aplicaría.
-- Solo administradores pueden crear/editar horarios y excepciones (`admin_required`, mismo patrón
-  que el resto del sistema) — el empleado solo tiene acceso de lectura a lo suyo.
+- `USE_TZ = False` — los campos `TimeField`/`DateField` no llevan timezone, consistente con el
+  resto del sistema.
+- Solo administradores pueden crear/editar turnos, asignaciones y excepciones (`admin_required`,
+  mismo patrón que el resto del sistema) — el empleado solo tiene acceso de lectura.
 - Tests obligatorios antes de merge (suite completa debe seguir en las mismas ~9 failures + 6
   errors preexistentes, sin regresiones nuevas — mismo criterio de verificación que la spec
   anterior, precios-estables-bs).
 
 ## 5. Decisions Already Made
 
-Decididas por Simón al inicio de esta sesión:
+Decididas por Simón en esta sesión:
 
-1. **Alcance**: calendario de horario recurrente + excepciones puntuales. **No** es un sistema de
-   fichaje ni calcula horas trabajadas.
+1. **Alcance**: planilla de turnos + excepciones puntuales. **No** es un sistema de fichaje ni
+   calcula horas trabajadas.
 2. **Sin restricción de acceso**: el horario es informativo. No bloquea login ni ventas en un día
    marcado como libre.
-3. **Turnos CON horario** (hora de entrada y salida por día), no solo "trabaja/no trabaja" — hay
-   dos empleados reales con turnos que se superponen parcialmente (el de la mañana se va minutos u
-   horas después de que llega el de la tarde-noche), así que hace falta el horario exacto para que
-   el modelo tenga sentido.
-4. **Solo Leida (admin) edita** horarios y excepciones. El empleado solo ve el suyo, de solo
+3. **Turnos fijos con horario** (Mañana 7:00am-3:00pm, Tarde 1:00pm-9:00pm) — no "trabaja/no
+   trabaja" genérico.
+4. **Solo Leida (admin) edita** la planilla y las excepciones. El empleado solo ve, de solo
    lectura.
+5. **App nueva** (`schedules`) — consistente con la convención del proyecto de "un módulo por
+   dominio de negocio", en vez de meterlo dentro de `accounts`.
+6. **Excepciones de día completo únicamente** en esta versión — sin granularidad de medio día.
+7. **Tipos de excepción con categorías fijas** (`vacaciones` / `permiso` / `enfermedad` / `otro`)
+   + campo de texto libre opcional para el detalle — permite reportes futuros sin tener que
+   parsear texto libre.
+8. **Tabla simple, no calendario visual** — por ahora. El calendario visual queda como evolución
+   futura explícita, no de esta spec.
+9. **Planilla de asignación día a día, no horario recurrente semanal** — porque los dos empleados
+   rotan entre los turnos mañana/tarde sin un patrón fijo semanal (hallazgo real que corrigió el
+   diseño original de esta spec, ver sección 2 y 3).
 
 ## 6. Tasks (implementación — a ejecutar solo después de aprobación)
 
-1. [ ] Definir si es una app nueva (`schedules`) o vive dentro de `accounts` (ver decisión 7.1).
-2. [ ] Modelo `WeeklySchedule` (empleado, día de semana 0-6, trabaja ese día, hora entrada, hora
-   salida) + `HistoricalRecords()`.
-3. [ ] Modelo `ScheduleException` (empleado, fecha inicio, fecha fin, tipo de excepción, motivo
-   libre opcional) + `HistoricalRecords()`.
-4. [ ] Migraciones.
-5. [ ] `WeeklyScheduleForm` (formset de 7 días por empleado) y `ScheduleExceptionForm`.
-6. [ ] Vista admin: editar horario semanal de un empleado (`admin_required`).
-7. [ ] Vista admin: listar/crear/eliminar excepciones de un empleado (`admin_required`).
-8. [ ] Vista admin: panel consolidado "quién trabaja hoy/esta semana" + "próximos días libres" de
-   todos los empleados.
-9. [ ] Vista de empleado: ver su propio horario y sus excepciones (solo lectura, filtrado a
-   `request.user`).
-10. [ ] Templates (Tailwind, Alpine sin JS inline, siguiendo convenciones del resto del sistema).
+1. [ ] Crear app nueva `schedules`, registrarla en `INSTALLED_APPS`.
+2. [ ] Modelo `Shift` (Turno): `name`, `start_time`, `end_time` + `HistoricalRecords()`. Data
+   migration que crea los 2 turnos iniciales (Mañana 7:00-15:00, Tarde 13:00-21:00).
+3. [ ] Modelo `ShiftAssignment` (AsignacionDeTurno): `date`, `shift` (FK), `employee` (FK a
+   `accounts.User`), `unique_together` en (`date`, `shift`) — un solo empleado por turno por día.
+   + `HistoricalRecords()`.
+4. [ ] Modelo `ScheduleException` (ExcepcionDeHorario): `employee`, `date_start`, `date_end`,
+   `exception_type` (choices), `reason` (texto libre opcional) + `HistoricalRecords()`.
+5. [ ] Validación: no permitir crear/editar una `ShiftAssignment` para un empleado en una fecha
+   cubierta por una `ScheduleException` activa de ese mismo empleado.
+6. [ ] Migraciones.
+7. [ ] Vista admin: planilla semanal editable — tabla de 7 días × 2 turnos, edición inline por
+   celda vía HTMX (`admin_required`). Navegación entre semanas (anterior/siguiente).
+8. [ ] Vista admin: listar/crear/eliminar excepciones por empleado (`admin_required`).
+9. [ ] Vista de empleado: planilla semanal de solo lectura + sus propias excepciones próximas.
+10. [ ] Templates (Tailwind, HTMX/Alpine sin JS inline, siguiendo convenciones del resto del
+    sistema).
 11. [ ] Entrada de menú en la navegación (`base.html`) visible según rol.
-12. [ ] Tests: modelos, formularios, vistas (permisos admin vs empleado), casos de excepción que
-    se superpone con el horario recurrente.
+12. [ ] Tests: modelos (`unique_together`, validación de excepción vs. asignación), vistas
+    (permisos admin vs. empleado), edición inline vía HTMX.
 13. [ ] Actualizar `docs/PENDIENTES.md` al cerrar.
 
-## 7. Preguntas abiertas (decidir antes de implementar)
-
-1. **App nueva vs. extender `accounts`**: ¿creamos una app nueva (`schedules` o `horarios`, más
-   alineado con la convención del proyecto de "un módulo por dominio de negocio" del `CLAUDE.md`),
-   o lo metemos dentro de `accounts` ya que gira en torno al `User`? **Recomendado: app nueva**,
-   consistente con cómo están organizados `inventory`, `sales`, `customers`, etc.
-2. **Granularidad de las excepciones**: ¿alcanza con "día completo libre", o hace falta contemplar
-   medio día / "sale más temprano tal día en particular" sin ser una excepción completa?
-   **Recomendado: día completo únicamente** en esta primera versión — más simple, cubre el caso
-   real de vacaciones/permisos/enfermedad.
-3. **Tipos de excepción**: ¿categorías fijas (ej. `vacaciones` / `permiso` / `enfermedad` / `otro`)
-   con un choice field, o simplemente fecha(s) + un campo de texto libre para el motivo?
-   **Recomendado: categorías fijas + texto libre opcional** — no cuesta nada implementarlo y sirve
-   si más adelante Leida quiere un reporte de "cuántos días de enfermedad tomó cada quien este
-   año", sin tener que parsear texto libre después.
-4. **Vista del panel consolidado**: ¿una tabla simple (recomendado, consistente con el resto del
-   sistema — sin JS de calendario) o un calendario visual tipo grid mensual (bastante más trabajo
-   de frontend, requeriría una librería o Alpine bastante elaborado)? **Recomendado: tabla simple.**
-5. **Cambios de horario frecuentes**: ¿los turnos de los dos empleados son prácticamente fijos casi
-   todo el tiempo, o cambian seguido (ej. rotan semana por medio)? Esto decide si vale la pena una
-   función de "duplicar el horario de la semana pasada" o si alcanza con un formulario simple de
-   "editar mi horario recurrente" que rara vez se toca. **Asumido por ahora: cambian poco**, un
-   formulario simple alcanza — pero vale confirmarlo porque cambia el esfuerzo de UI.
-
-## 8. Verification (cómo verificar antes de dar por cerrada la spec)
+## 7. Verification (cómo verificar antes de dar por cerrada la spec)
 
 - [ ] Tests pasan (`python manage.py test`), sin regresiones sobre el baseline conocido.
-- [ ] Prueba manual: Leida configura el horario semanal de ambos empleados reales (turno mañana y
-  turno tarde-noche, con la superposición real entre ambos) y lo ve reflejado correctamente.
+- [ ] Prueba manual: Leida arma la planilla de una semana real con sus dos empleados rotando entre
+  mañana y tarde (incluyendo un día donde cambian respecto al día anterior) y la ve reflejada
+  correctamente.
 - [ ] Prueba manual: Leida marca un día libre puntual para un empleado (ej. una semana de
-  vacaciones) y confirma que aparece en el panel consolidado y en la vista propia del empleado.
+  vacaciones) y confirma que no se lo puede asignar a un turno esos días (validación) y que la
+  excepción aparece en su vista propia.
 - [ ] Prueba manual: el empleado con día libre puede seguir logueándose y operando el sistema sin
   ningún bloqueo (confirma que la decisión de "sin restricción" quedó bien implementada).
 - [ ] Review de Simón (y de Leida, si hace falta validar el flujo desde el punto de vista de uso
