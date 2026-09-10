@@ -36,11 +36,25 @@
     igual que el resto del sistema (`product_create`, etc.).
   - Verificado el endpoint HTMX end-to-end con requests HTTP reales (login + POST con header
     `X-CSRFToken` contra el servidor local: asignar, reasignar, desasignar). **Sin verificación
-    visual con navegador real** — la extensión de Chrome no estaba conectada esta sesión, así que
-    no se confirmó con los propios ojos que el `<select>` dispara el cambio correctamente en un
-    navegador de verdad (el contrato HTTP/HTML está confirmado correcto).
-  - **Pendiente, no bloqueante:** prueba manual de Simón/Leida en navegador real antes de
-    considerar el ciclo cerrado del todo.
+    visual con navegador real en ninguna de las 3 sesiones de este módulo** — la extensión de
+    Chrome no estuvo conectada ni al implementar ni al pulir el diseño ni al desplegar; todo se
+    verificó por HTTP/HTML/shell (el contrato está confirmado correcto, pero nadie de Claude lo
+    vio funcionar con sus propios ojos en un navegador real).
+  - **Pulido visual (2026-09-07, a pedido de Simón: "se ve muy básico")**: la planilla pasó de una
+    tabla plana a una grilla de tarjetas por día; cada turno tiene tema propio (Mañana ámbar +
+    sol, Tarde índigo + luna — color + ícono, no solo color); el `<select>` crudo pasó a un
+    patrón de chip con avatar (iniciales, color determinístico por empleado) que se expande a
+    select solo al hacer clic; el tipo de excepción pasó de `<select>` a pills de color
+    (`RadioSelect`). Bug encontrado y corregido en el camino: Django agregaba una opción en
+    blanco no pedida al campo `exception_type` (sin `default` en el modelo) — corregido fijando
+    los choices explícitamente en el form. 494 tests, mismas fallas preexistentes, 0 regresiones.
+  - **DESPLEGADO a producción (2026-09-09)**: `pg_dump` completo verificado (44.9MB) antes de
+    tocar nada, `git pull --ff-only` (10 commits), solo el contenedor `web` se recreó — `db`/
+    `nginx` sin interrupción. Turnos Mañana/Tarde sembrados en la BD real, verificado con
+    `/health/` 200 y `manage.py check` sin errores.
+  - **Pendiente, no bloqueante:** prueba manual de Simón/Leida en navegador real (local o
+    producción) antes de considerar el ciclo cerrado del todo — sigue siendo el único paso de
+    verificación que Claude no pudo hacer en ninguna de las 3 sesiones.
 - **COMPLETADO (2026-08-17) — Calculadora integrada en el navbar + spec de "Precios Estables en Bs".**
   - **Calculadora:** botón en el header (visible para todo usuario autenticado, todas las vistas),
     panel con dos pestañas — calculadora básica de 4 operaciones, y conversor "USD físico → BCV"
@@ -281,5 +295,5 @@
 - [x] 2 bugs resueltos ✅ (2026-04-16)
 
 ## Última sesión
-2026-09-09: [snapshot automático — 0
+2026-09-10: [snapshot automático — 0
 0 commit(s)]
