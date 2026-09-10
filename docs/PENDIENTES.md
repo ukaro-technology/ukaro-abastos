@@ -295,5 +295,4 @@
 - [x] 2 bugs resueltos ✅ (2026-04-16)
 
 ## Última sesión
-2026-09-10: [snapshot automático — 0
-0 commit(s)]
+2026-09-10: [snapshot automático]
