@@ -268,6 +268,7 @@
   hizo). Programar para un horario de bajo tráfico.
 
 ## Próximos pasos
+- [ ] **Corrección de decimales** (prioridad media) — tarea anotada por Simón en Platform el 2026-10-09; falta detallar qué pantalla/cálculo.
 - [ ] Configurar rotación de logs del daemon de Docker en el droplet NUEVO (ver hallazgo arriba) — horario de
       bajo tráfico, reinicia los 3 contenedores a la vez.
 - [ ] Rotación + copia externa de los backups JSON manuales (`/app/backups` en el contenedor web).
