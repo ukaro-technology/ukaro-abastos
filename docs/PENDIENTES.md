@@ -278,8 +278,9 @@
 - [ ] **CI/CD pipeline** (GitHub Actions) — auto-deploy al push en main
 
 ## Última sesión
-2026-09-10: [snapshot automático]
-
+2026-10-09: [snapshot automático — 2 commit(s)]
+- 81671ea ops: script copiar_base.py para contingencia Postgres<->SQLite (PythonAnywhere)
+- 1a1077a auto-sync: 2026-10-09_13:09
 ## Histórico
 
 Las secciones de trabajo ya terminado se movieron a [`PENDIENTES-archivo.md`](./PENDIENTES-archivo.md) (1 sección(es)).
