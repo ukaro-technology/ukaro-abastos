@@ -27,6 +27,17 @@ Respaldos en la laptop (`~/respaldos/abastos/`, fuera de git porque son datos re
 - `pa-inicial-20261009-2331.sqlite3` — la base con la que arrancó PythonAnywhere.
 - `pythonanywhere-viejo/` — la copia de abril/julio que había antes en la cuenta (borrada de PA).
 
+## Respaldos diarios
+
+1. **En PythonAnywhere:** tarea programada id `1542872`, todos los días 03:05 UTC (23:05 Caracas, después
+   del cierre): copia la base con la API `backup` de sqlite3 a `/home/Bodegaleida/respaldo/abastos.sqlite3`.
+   **Vence el 2026-11-07** (las tareas del plan gratis hay que extenderlas en la pestaña *Tasks*).
+2. **En la laptop:** `scripts/respaldo_pythonanywhere.sh` descarga esa copia, verifica `integrity_check` y la
+   última venta, y conserva las últimas 30 en `~/respaldos/abastos/pa-diario/` (log en `respaldo.log`). Lo corre
+   el timer de systemd del usuario `respaldo-abastos-pa.timer` a las 07:00 (con `Persistent=true`: si la laptop
+   estaba apagada, corre al encender). Ver estado: `systemctl --user list-timers`.
+   Al terminar la contingencia: `systemctl --user disable --now respaldo-abastos-pa.timer` y borrar la tarea de PA.
+
 ## Límites del plan gratis
 
 - La web app **vence el 2026-10-25**: si la contingencia sigue, antes de esa fecha entrar a la pestaña
