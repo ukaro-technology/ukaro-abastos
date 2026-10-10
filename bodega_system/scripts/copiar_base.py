@@ -24,8 +24,15 @@ import json
 import os
 import sqlite3
 import sys
+import zoneinfo
 
 import psycopg2
+
+# El sistema corre con USE_TZ=False y TIME_ZONE='America/Caracas': Django guarda en Postgres columnas
+# timestamptz, pero en SQLite espera fechas SIN zona en hora de Caracas. Si se copian con el desfase
+# ('...-04:00'), Django las lee como fechas con zona y luego no puede volver a guardarlas
+# ("SQLite backend does not support timezone-aware datetimes when USE_TZ is False").
+ZONA = zoneinfo.ZoneInfo('America/Caracas')
 
 # Tablas que crea/llena migrate y no se deben copiar
 EXCLUIR = {'django_migrations', 'sqlite_sequence'}
@@ -47,6 +54,8 @@ def a_sqlite(valor):
         return int(valor)
     if isinstance(valor, decimal.Decimal):
         return str(valor)
+    if isinstance(valor, datetime.datetime) and valor.tzinfo is not None:
+        valor = valor.astimezone(ZONA).replace(tzinfo=None)
     if isinstance(valor, (datetime.datetime, datetime.date, datetime.time)):
         return str(valor)  # 'YYYY-MM-DD HH:MM:SS[.ffffff]', igual que Django
     if isinstance(valor, (dict, list)):
@@ -78,6 +87,7 @@ def copiar_a_sqlite(dsn, ruta):
     sq = sqlite3.connect(ruta)
     sq.execute('PRAGMA foreign_keys=OFF')
     cur = pg.cursor()
+    cur.execute("set time zone 'America/Caracas'")
     faltan = tablas_pg(cur) - tablas_sqlite(sq)
     if faltan:
         sys.exit(f'ERROR: tablas en Postgres sin equivalente en SQLite (¿código distinto?): {sorted(faltan)}')
@@ -112,6 +122,8 @@ def copiar_a_postgres(dsn, ruta):
     faltan = set(tablas) - tablas_pg(cur)
     if faltan:
         sys.exit(f'ERROR: tablas sin equivalente en Postgres (¿falta migrar?): {sorted(faltan)}')
+    # Las fechas del SQLite son hora de Caracas sin zona: que Postgres las interprete así
+    cur.execute("set time zone 'America/Caracas'")
     # Los triggers de FK se desactivan durante la carga y se verifican al final
     cur.execute('set session_replication_role = replica')
     for tabla in tablas:
