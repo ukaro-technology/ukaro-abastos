@@ -273,6 +273,8 @@
 
 ## Próximos pasos
 - [ ] **Antes del 2026-10-25:** extender la web app de PythonAnywhere ("Run until 3 months from today") si la contingencia sigue.
+- [ ] **Antes del 2026-11-07:** extender la tarea programada de respaldo en PA (pestaña Tasks, id 1542872) si la contingencia sigue.
+- [ ] Escribir al soporte de DigitalOcean (borrador en la sesión del 2026-10-09; la extensión de Chrome no estaba conectada y el token de doctl da 401).
 - [ ] **Volver a DigitalOcean** cuando se resuelva el pago: seguir `docs/CONTINGENCIA-PYTHONANYWHERE.md` (sección "Vuelta").
 - [ ] Mergear la rama `ops/contingencia-pythonanywhere` (script `copiar_base.py` + doc de contingencia).
 - [ ] **Corrección de decimales** (prioridad media) — tarea anotada por Simón en Platform el 2026-10-09; falta detallar qué pantalla/cálculo.
