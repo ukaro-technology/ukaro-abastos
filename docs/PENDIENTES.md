@@ -1,6 +1,10 @@
 # Pendientes — Ukaro Abastos
 
 ## Decisiones activas
+- **CONTINGENCIA ACTIVA (desde 2026-10-09 23:31) — Leida trabaja en https://bodegaleida.pythonanywhere.com.**
+  Problema de pago con DigitalOcean; `abastos_web` detenido en el droplet. La ÚNICA base viva es el SQLite de
+  PythonAnywhere: NO reactivar `abastos_web` sin antes traer esa base de vuelta. Todo en
+  `docs/CONTINGENCIA-PYTHONANYWHERE.md` (montaje, límites del plan gratis, procedimiento de vuelta).
 - **COMPLETADO (2026-09-07) — Spec "Horarios de Empleados y Días Libres", implementada.**
   (`docs/specs/horarios-empleados.md`). Pedido de Simón, tarea anotada en Platform ("Horario de
   empleados y días libres"). App nueva `schedules`, 32 tests nuevos en verde, 0 regresiones
@@ -268,6 +272,9 @@
   hizo). Programar para un horario de bajo tráfico.
 
 ## Próximos pasos
+- [ ] **Antes del 2026-10-25:** extender la web app de PythonAnywhere ("Run until 3 months from today") si la contingencia sigue.
+- [ ] **Volver a DigitalOcean** cuando se resuelva el pago: seguir `docs/CONTINGENCIA-PYTHONANYWHERE.md` (sección "Vuelta").
+- [ ] Mergear la rama `ops/contingencia-pythonanywhere` (script `copiar_base.py` + doc de contingencia).
 - [ ] **Corrección de decimales** (prioridad media) — tarea anotada por Simón en Platform el 2026-10-09; falta detallar qué pantalla/cálculo.
 - [ ] Configurar rotación de logs del daemon de Docker en el droplet NUEVO (ver hallazgo arriba) — horario de
       bajo tráfico, reinicia los 3 contenedores a la vez.
