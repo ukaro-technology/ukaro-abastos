@@ -6,7 +6,8 @@
 SuperMoto Speed es una tienda de repuestos de moto en Guanare que abre ~1 de noviembre de
 2026. Antes de contratar, el dueño verá un demo con su marca. Simón aprobó adaptar este mismo
 sistema (no copiar el proyecto): **mismo código, un perfil por negocio, una instalación por
-cliente**. El demo se publica en PythonAnywhere (`docs/deploy/pythonanywhere-demo.md`).
+cliente**. El demo se publica en Render (`render.yaml`, `docs/deploy/render-demo.md`) o en
+PythonAnywhere (`docs/deploy/pythonanywhere-demo.md`).
 
 Datos del cliente que definieron el alcance: solo usan teléfonos (sin PC ni impresora), los
 clientes piden "pastillas para una SBR" (por pieza y moto, no por código), unas piezas traen

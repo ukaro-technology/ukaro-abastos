@@ -248,3 +248,17 @@ class SeedCommandTest(TestCase):
         caucho = Product.objects.get(name='Caucho trasero 90/90-18')
         self.assertEqual(caucho.selling_price_usd, Decimal('30.00'))
         self.assertGreater(caucho.stock, 0)
+
+    @MOTOPARTS
+    def test_if_empty_skips_when_products_exist(self):
+        from django.core.management import call_command
+        category = Category.objects.create(name='Real')
+        make_product(category, 'Producto real', 'REAL001')
+        call_command('seed_motoparts_demo', '--if-empty', stdout=open(os.devnull, 'w'))
+        self.assertEqual(Product.objects.count(), 1)
+
+    @mock.patch.dict(os.environ, {'BUSINESS_PROFILE': 'motoparts', 'DEMO_PASSWORD': 'otra-clave'})
+    def test_demo_password_from_env(self):
+        from django.core.management import call_command
+        call_command('seed_motoparts_demo', stdout=open(os.devnull, 'w'))
+        self.assertTrue(User.objects.get(username='dueno').check_password('otra-clave'))

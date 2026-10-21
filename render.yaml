@@ -1,0 +1,57 @@
+# Demo de SuperMoto Speed (perfil 'motoparts') en Render, plan gratuito.
+# Se crea desde el panel de Render: New → Blueprint → este repositorio.
+# Guía: docs/deploy/render-demo.md
+databases:
+  - name: supermoto-db
+    plan: free
+    databaseName: supermoto
+    user: supermoto
+
+services:
+  - type: web
+    name: supermoto-demo
+    runtime: python
+    plan: free
+    branch: ccr-2db2fa98-fx0vm7
+    buildCommand: >-
+      pip install -r requirements.txt &&
+      cd bodega_system && python manage.py collectstatic --noinput
+    # El plan gratuito no tiene "pre-deploy command": las migraciones y los datos de ejemplo
+    # (solo si la base está vacía) corren en cada arranque.
+    startCommand: >-
+      cd bodega_system &&
+      python manage.py migrate --noinput &&
+      python manage.py seed_motoparts_demo --if-empty &&
+      gunicorn bodega_system.wsgi --workers 2 --timeout 120 --bind 0.0.0.0:$PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      - key: BUSINESS_PROFILE
+        value: motoparts
+      - key: DEBUG
+        value: "False"
+      - key: SECRET_KEY
+        generateValue: true
+      # Contraseña de los usuarios del demo (dueno, papa, vendedor): Render la pide al crear
+      - key: DEMO_PASSWORD
+        sync: false
+      - key: DB_NAME
+        fromDatabase:
+          name: supermoto-db
+          property: database
+      - key: DB_USER
+        fromDatabase:
+          name: supermoto-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: supermoto-db
+          property: password
+      - key: DB_HOST
+        fromDatabase:
+          name: supermoto-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: supermoto-db
+          property: port

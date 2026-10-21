@@ -15,7 +15,13 @@
     `sales.0005` (campos de descuento con default 0), `utils.0002` (StoreSettings).
   - `.gitignore` tenía `parts/` (plantilla de Python/buildout) que ignoraba la app: se cambió a
     `/parts/`.
-  - **Pendiente:** Simón publica el demo en PythonAnywhere (`docs/deploy/pythonanywhere-demo.md`)
+  - **Render (2026-10-21):** `render.yaml` (Blueprint: web + PostgreSQL gratis) y guía
+    `docs/deploy/render-demo.md`. Arranque probado en local contra PostgreSQL 16 (migrate +
+    `seed_motoparts_demo --if-empty` + gunicorn) y tests de `parts`/`sales`/`inventory`/`utils`
+    contra PostgreSQL: sin fallas nuevas. Claude no puede crear el servicio (sin cuenta de
+    Render ni acceso a render.com desde el entorno): lo crea Simón con New → Blueprint.
+  - **Pendiente:** Simón publica el demo en Render (`docs/deploy/render-demo.md`) o en
+    PythonAnywhere (`docs/deploy/pythonanywhere-demo.md`)
     y lo presenta con `docs/demo-supermoto-guion.md`; después el cliente llena el formulario de
     levantamiento (Google Forms, script fuera del repo) y con eso se escribe el spec de la
     versión real (importación Excel, devoluciones, precio mecánicos, etc.).

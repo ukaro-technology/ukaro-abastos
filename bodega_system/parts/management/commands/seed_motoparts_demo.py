@@ -12,9 +12,12 @@ Uso:
     python manage.py seed_motoparts_demo --barcodes-pdf etiquetas_demo.pdf
 
 Se niega a correr si ya hay productos en la base de datos (para no mezclar el demo con
-datos reales), salvo que se pase --force.
+datos reales), salvo que se pase --force. Con --if-empty no hace nada si ya hay productos
+(así se puede correr en cada arranque del servidor, como en render.yaml). La contraseña de
+los usuarios del demo sale de la variable DEMO_PASSWORD, si existe.
 """
 
+import os
 import random
 from datetime import datetime, time, timedelta
 from decimal import Decimal, ROUND_HALF_UP
@@ -31,7 +34,8 @@ from sales.models import Sale, SaleItem
 from suppliers.models import Supplier, SupplierOrder, SupplierOrderItem
 from utils.models import ExchangeRate, StoreSettings
 
-DEMO_PASSWORD = 'supermoto2026'
+# En un demo publicado en internet, DEMO_PASSWORD (variable de entorno) reemplaza esta clave.
+DEFAULT_DEMO_PASSWORD = 'supermoto2026'
 BCV_RATE = Decimal('200.00')
 CASH_USD_DISCOUNT = Decimal('16.67')
 CENT = Decimal('0.01')
@@ -162,10 +166,18 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument('--force', action='store_true',
                             help='Cargar aunque ya existan productos')
+        parser.add_argument('--if-empty', action='store_true',
+                            help='No hacer nada (y salir sin error) si ya hay productos. Para '
+                                 'correrlo en cada arranque del servidor, como en Render')
         parser.add_argument('--barcodes-pdf', metavar='RUTA',
                             help='Además, generar un PDF con códigos de barras de prueba para el escáner')
 
     def handle(self, *args, **options):
+        if Product.objects.exists() and options['if_empty']:
+            self.stdout.write('Ya hay productos: no se cargan datos de ejemplo.')
+            if options['barcodes_pdf']:
+                self.write_barcodes_pdf(options['barcodes_pdf'])
+            return
         if Product.objects.exists() and not options['force']:
             raise CommandError('Ya hay productos en la base de datos. Usa --force si de verdad '
                                'quieres agregar los datos de ejemplo.')
@@ -187,7 +199,7 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(
             f'Demo cargado: {Product.objects.count()} productos, {Sale.objects.count()} ventas.\n'
             f'Usuarios: dueno / papa (administradores), vendedor (empleado). '
-            f'Contraseña de todos: {DEMO_PASSWORD}\n'
+            f'Contraseña de todos: {"(la de DEMO_PASSWORD)" if os.environ.get("DEMO_PASSWORD") else DEFAULT_DEMO_PASSWORD}\n'
             f'Tasa BCV de ejemplo: {BCV_RATE} Bs/$ — actualízala en Configuración → Tasa de Cambio.'
         ))
 
@@ -203,7 +215,7 @@ class Command(BaseCommand):
                 'first_name': first, 'last_name': last,
                 'is_admin': is_admin, 'is_employee': not is_admin,
             })
-            user.set_password(DEMO_PASSWORD)
+            user.set_password(os.environ.get('DEMO_PASSWORD') or DEFAULT_DEMO_PASSWORD)
             user.save()
             users[username] = user
         return users['dueno']
