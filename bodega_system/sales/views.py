@@ -8,6 +8,7 @@ from django.core.paginator import Paginator
 from django.db.models import Sum, Avg, Q
 from django.utils.dateparse import parse_date
 
+from bodega_system.business import feature, get_business
 from .models import Sale, SaleItem
 from utils.models import ExchangeRate
 from utils.decorators import admin_required, employee_or_admin_required, sales_access_required
@@ -124,8 +125,19 @@ def sale_create(request):
         exchange_rate = 1.0
     
     # Preparar datos JSON seguros para JavaScript
+    from utils.models import StoreSettings
     data_for_js = {
         'exchangeRate': exchange_rate,
+        # Módulos del perfil del negocio (bodega_system/business.py)
+        'features': {
+            'motoParts': feature('moto_parts'),
+            'cashUsd': feature('cash_usd'),
+            'cameraScan': feature('camera_scan'),
+            'whatsappReceipt': feature('whatsapp_receipt'),
+        },
+        'cashUsdDiscountPercent': (
+            float(StoreSettings.get().cash_usd_discount_percent) if feature('cash_usd') else 0
+        ),
         'csrfToken': None,  # Se obtiene desde el template
         'apiUrls': {
             'createSale': '/sales/api/create/',
@@ -156,10 +168,16 @@ def sale_detail(request, pk):
             from django.core.exceptions import PermissionDenied
             raise PermissionDenied("No tienes permisos para ver esta venta.")
     
+    whatsapp_url = None
+    if feature('whatsapp_receipt'):
+        from .whatsapp import receipt_whatsapp_url
+        whatsapp_url = receipt_whatsapp_url(sale)
+
     return render(request, 'sales/sale_detail.html', {
         'sale': sale, 
         'items': sale.items.all(),
         'is_admin': request.user.is_admin or request.user.is_superuser,
+        'whatsapp_url': whatsapp_url,
     })
 
 @sales_access_required
@@ -193,7 +211,7 @@ def sale_receipt(request, pk):
     
     # Título
     p.setFont("Helvetica-Bold", 16)
-    p.drawCentredString(width/2, height - 1*inch, "Sistema de Bodega")
+    p.drawCentredString(width/2, height - 1*inch, get_business()['name'])
     
     p.setFont("Helvetica-Bold", 14)
     p.drawCentredString(width/2, height - 1.3*inch, f"Recibo de Venta #{sale.id}")
@@ -248,13 +266,22 @@ def sale_receipt(request, pk):
     table.drawOn(p, 0.6*inch, height - 4*inch - len(data)*0.25*inch)
     
     # Total
+    totals_y = height - 4.5*inch - len(data)*0.25*inch
+    if sale.discount_usd:
+        # Venta en dólares en efectivo con descuento: los precios de la tabla son de lista
+        p.setFont("Helvetica", 10)
+        p.drawRightString(6.4*inch, totals_y + 0.3*inch,
+                          f"Descuento efectivo $ ({sale.discount_percent.normalize():f}%): - $ {sale.discount_usd:.2f}")
     p.setFont("Helvetica-Bold", 12)
-    p.drawRightString(6.4*inch, height - 4.5*inch - len(data)*0.25*inch, f"Total: Bs {sale.total_bs:.2f}")
+    p.drawRightString(6.4*inch, totals_y, f"Total: Bs {sale.total_bs:.2f}")
     
-    if exchange_rate:
+    if sale.discount_usd:
+        p.setFont("Helvetica-Bold", 11)
+        p.drawRightString(6.4*inch, totals_y - 0.3*inch, f"Total en efectivo: $ {sale.total_usd:.2f}")
+    elif exchange_rate:
         p.setFont("Helvetica", 10)
         usd_total = sale.total_bs / exchange_rate.bs_to_usd
-        p.drawRightString(6.4*inch, height - 4.8*inch - len(data)*0.25*inch, f"Equivalente: $ {usd_total:.2f}")
+        p.drawRightString(6.4*inch, totals_y - 0.3*inch, f"Equivalente: $ {usd_total:.2f}")
     
     # Pie de página
     p.setFont("Helvetica", 8)

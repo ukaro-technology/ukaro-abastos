@@ -262,6 +262,37 @@
                 </div>
             </div>
 
+            {% if business.features.moto_parts and product.part_info %}
+            <!-- Datos del repuesto (app parts) -->
+            {% with part=product.part_info %}
+            <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+                <div class="bg-gray-900 px-6 py-4 border-b-4 border-blue-600">
+                    <h3 class="text-lg font-semibold text-white">🏍️ Datos del Repuesto</h3>
+                </div>
+                <div class="p-6">
+                    <dl class="space-y-3 text-sm">
+                        {% if part.part_brand %}<div class="flex justify-between"><dt class="text-gray-500">Marca:</dt><dd class="font-medium">{{ part.part_brand }}</dd></div>{% endif %}
+                        {% if part.quality %}<div class="flex justify-between"><dt class="text-gray-500">Calidad:</dt><dd class="font-medium">{{ part.get_quality_display }}</dd></div>{% endif %}
+                        {% if part.part_number %}<div class="flex justify-between"><dt class="text-gray-500">Número de parte:</dt><dd class="font-mono text-xs">{{ part.part_number }}</dd></div>{% endif %}
+                        {% if part.location %}<div class="flex justify-between"><dt class="text-gray-500">Ubicación:</dt><dd class="font-medium">{{ part.location }}</dd></div>{% endif %}
+                    </dl>
+                    <p class="text-gray-500 text-sm mt-4 mb-2">Le sirve a:</p>
+                    {% if part.is_universal %}
+                    <span class="inline-flex px-2.5 py-1 rounded-full text-xs font-medium bg-gray-900 text-white">Cualquier moto (universal)</span>
+                    {% else %}
+                    <div class="flex flex-wrap gap-1.5">
+                        {% for moto in part.compatible_models.all %}
+                        <span class="inline-flex px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">{{ moto }}</span>
+                        {% empty %}
+                        <span class="text-sm text-gray-400">Sin motos registradas</span>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endwith %}
+            {% endif %}
+
             <!-- Metadatos -->
             <div class="bg-white rounded-xl shadow-lg overflow-hidden">
                 <div class="bg-gray-600 px-6 py-4">

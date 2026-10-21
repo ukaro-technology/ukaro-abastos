@@ -71,6 +71,31 @@ class ExchangeRate(models.Model):
         cache.delete('exchange_rate_latest')
 
 
+class StoreSettings(models.Model):
+    """Ajustes del negocio editables desde el sistema (una sola fila, pk=1)."""
+    cash_usd_discount_percent = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=0,
+        verbose_name="Descuento por pago en dólares en efectivo (%)",
+        help_text="Se aplica al total de la venta cuando el método de pago es 'Efectivo $'. "
+                  "Ej.: 16.67 hace que un producto de $30 quede en $25."
+    )
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Actualizado el")
+
+    class Meta:
+        verbose_name = "Ajustes del Negocio"
+        verbose_name_plural = "Ajustes del Negocio"
+
+    def __str__(self):
+        return "Ajustes del negocio"
+
+    @classmethod
+    def get(cls):
+        settings_obj, _ = cls.objects.get_or_create(pk=1)
+        return settings_obj
+
+
 class Backup(models.Model):
     """Modelo para los respaldos de la base de datos"""
     date = models.DateTimeField(auto_now_add=True, verbose_name="Fecha")

@@ -17,7 +17,9 @@ from .models import (Category, Product, InventoryAdjustment, ProductCombo, Combo
 from .forms import (CategoryForm, ProductForm, InventoryAdjustmentForm,
                    ProductComboForm, ComboItemFormset)
 from .services import TraceabilityService
+from .search import search_products
 from .pdf_generators import pdf_inventory_count_report, pdf_product_traceability, pdf_inventory_count_sheet
+from bodega_system.business import feature
 from utils.decorators import admin_required, inventory_access_required
 
 # Vistas de Productos - Empleados y Administradores (Solo Lectura para Empleados)
@@ -37,12 +39,11 @@ def product_list(request):
         products = products.filter(category_id=category_id)
 
     if search_query:
-        products = products.filter(
-            name__icontains=search_query
-        ) | products.filter(
-            barcode__icontains=search_query
-        ) | products.filter(
-            description__icontains=search_query
+        products = search_products(products, search_query)
+
+    if feature('moto_parts'):
+        products = products.select_related('part_info').prefetch_related(
+            'part_info__compatible_models__brand'
         )
 
     if stock_filter == 'low':
@@ -94,13 +95,32 @@ def product_detail(request, pk):
         'is_admin': is_admin,  # ⭐ NUEVO: Para controlar botones de edición
     })
 
+def _part_form(data=None, instance=None):
+    """Formulario de datos de repuesto (app parts), o None si el módulo no está activo."""
+    if not feature('moto_parts'):
+        return None
+    from parts.forms import PartInfoForm
+    return PartInfoForm(data, instance=instance, prefix='part')
+
+
+def _save_part_form(part_form, product):
+    if part_form is None:
+        return
+    part_info = part_form.save(commit=False)
+    part_info.product = product
+    part_info.save()
+    part_form.save_m2m()
+
+
 @admin_required
 def product_create(request):
     """Vista para crear un nuevo producto - Solo Administradores"""
     if request.method == 'POST':
         form = ProductForm(request.POST, request.FILES)
-        if form.is_valid():
+        part_form = _part_form(request.POST)
+        if form.is_valid() and (part_form is None or part_form.is_valid()):
             product = form.save()
+            _save_part_form(part_form, product)
             messages.success(request, f'Producto "{product.name}" creado exitosamente.')
 
             # Registrar ajuste inicial si se especificó stock
@@ -129,6 +149,7 @@ def product_create(request):
             return redirect('inventory:product_detail', pk=product.pk)
     else:
         form = ProductForm()
+        part_form = _part_form()
 
     # ⭐ CORREGIDO: Obtener tasa de cambio actual para mostrar equivalente en Bs
     from utils.models import ExchangeRate
@@ -136,6 +157,7 @@ def product_create(request):
 
     return render(request, 'inventory/product_form.html', {
         'form': form,
+        'part_form': part_form,
         'title': 'Nuevo Producto',
         'show_initial_stock': True,
         'latest_exchange_rate': latest_exchange_rate,  # ⭐ NUEVO: Para mostrar conversión USD→Bs
@@ -146,14 +168,19 @@ def product_update(request, pk):
     """Vista para actualizar un producto - Solo Administradores"""
     product = get_object_or_404(Product, pk=pk)
 
+    part_info = getattr(product, 'part_info', None) if feature('moto_parts') else None
+
     if request.method == 'POST':
         form = ProductForm(request.POST, request.FILES, instance=product)
-        if form.is_valid():
+        part_form = _part_form(request.POST, instance=part_info)
+        if form.is_valid() and (part_form is None or part_form.is_valid()):
             form.save()
+            _save_part_form(part_form, product)
             messages.success(request, f'Producto "{product.name}" actualizado exitosamente.')
             return redirect('inventory:product_detail', pk=product.pk)
     else:
         form = ProductForm(instance=product)
+        part_form = _part_form(instance=part_info)
 
     # ⭐ CORREGIDO: Obtener tasa de cambio actual para mostrar equivalente en Bs
     from utils.models import ExchangeRate
@@ -162,6 +189,7 @@ def product_update(request, pk):
     return render(request, 'inventory/product_form.html', {
         'form': form,
         'product': product,
+        'part_form': part_form,
         'title': 'Editar Producto',
         'show_initial_stock': False,
         'latest_exchange_rate': latest_exchange_rate,  # ⭐ NUEVO: Para mostrar conversión USD→Bs

@@ -113,3 +113,25 @@ def exchange_rate_history(request):
         'date_from': date_from,
         'date_to': date_to,
     })
+
+@admin_required
+def store_settings(request):
+    """Ajustes del negocio (descuento por pago en dólares en efectivo) - Solo Administradores"""
+    from bodega_system.business import feature
+    from .forms import StoreSettingsForm
+    from .models import StoreSettings
+
+    if not feature('cash_usd'):
+        return redirect('dashboard')
+
+    settings_obj = StoreSettings.get()
+    if request.method == 'POST':
+        form = StoreSettingsForm(request.POST, instance=settings_obj)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Ajustes guardados.')
+            return redirect('utils:store_settings')
+    else:
+        form = StoreSettingsForm(instance=settings_obj)
+
+    return render(request, 'utils/store_settings.html', {'form': form})

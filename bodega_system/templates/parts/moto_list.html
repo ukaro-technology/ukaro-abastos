@@ -1,0 +1,81 @@
+{% extends 'base/base.html' %}
+
+{% block title %}Marcas y Modelos de Moto - {{ business.system_name }}{% endblock %}
+
+{% block content %}
+<div class="bg-white rounded-lg shadow-md p-4 sm:p-6 mb-6">
+    <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800">Marcas y Modelos de Moto</h1>
+            <p class="text-sm text-gray-500 mt-1">Estas son las motos que aparecen al marcar la compatibilidad de cada repuesto.</p>
+        </div>
+        <a href="{% url 'inventory:product_list' %}" class="bg-gray-500 hover:bg-gray-600 text-white font-medium py-2 px-4 rounded-md inline-flex items-center justify-center">
+            Volver al Inventario
+        </a>
+    </div>
+
+    <!-- Formularios para agregar -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+        <form method="post" class="border border-gray-200 rounded-lg p-4 space-y-3">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="add_brand">
+            <h2 class="font-semibold text-gray-800">Nueva marca</h2>
+            {{ brand_form.name }}
+            {% for error in brand_form.name.errors %}<p class="text-sm text-red-600">{{ error }}</p>{% endfor %}
+            <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-4 rounded-md">Agregar marca</button>
+        </form>
+
+        <form method="post" class="border border-gray-200 rounded-lg p-4 space-y-3">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="add_model">
+            <h2 class="font-semibold text-gray-800">Nuevo modelo</h2>
+            {{ model_form.brand }}
+            <div class="grid grid-cols-3 gap-3">
+                <div class="col-span-2">{{ model_form.name }}</div>
+                <div>{{ model_form.displacement_cc }}</div>
+            </div>
+            {% for field in model_form %}{% for error in field.errors %}<p class="text-sm text-red-600">{{ error }}</p>{% endfor %}{% endfor %}
+            {% for error in model_form.non_field_errors %}<p class="text-sm text-red-600">{{ error }}</p>{% endfor %}
+            <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-4 rounded-md">Agregar modelo</button>
+        </form>
+    </div>
+
+    <!-- Marcas con sus modelos -->
+    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        {% for brand in brands %}
+        <div class="border border-gray-200 rounded-lg overflow-hidden">
+            <div class="bg-gray-900 text-white px-4 py-3 flex justify-between items-center">
+                <span class="font-semibold">{{ brand.name }}</span>
+                <span class="text-xs text-gray-300">{{ brand.model_count }} modelo{{ brand.model_count|pluralize }}</span>
+            </div>
+            <ul class="divide-y divide-gray-100">
+                {% for moto in brand.models.all %}
+                <li class="px-4 py-2.5 flex justify-between items-start gap-3">
+                    <div class="min-w-0">
+                        <p class="text-sm font-medium text-gray-900">{{ moto.name }}{% if moto.displacement_cc %} <span class="text-xs font-normal text-gray-500">· {{ moto.displacement_cc }} cc</span>{% endif %}</p>
+                        <p class="text-xs text-gray-500 mt-0.5">
+                            {{ moto.part_count }} repuesto{{ moto.part_count|pluralize }} ·
+                            <a href="{% url 'inventory:product_list' %}?q={{ brand.name|urlencode }}+{{ moto.name|urlencode }}"
+                               class="text-blue-600 hover:text-blue-800 font-medium">Ver repuestos</a>
+                        </p>
+                    </div>
+                    <form method="post" onsubmit="return confirm('¿Eliminar {{ brand.name|escapejs }} {{ moto.name|escapejs }}? Los repuestos dejarán de mostrarlo como compatible.');">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="delete_model">
+                        <input type="hidden" name="model_id" value="{{ moto.pk }}">
+                        <button type="submit" class="p-1 text-gray-400 hover:text-red-600" aria-label="Eliminar modelo">
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                        </button>
+                    </form>
+                </li>
+                {% empty %}
+                <li class="px-4 py-3 text-sm text-gray-400">Sin modelos todavía.</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% empty %}
+        <p class="text-gray-500">Todavía no hay marcas registradas.</p>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

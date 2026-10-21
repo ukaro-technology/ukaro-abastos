@@ -5,7 +5,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Sistema de Bodega{% endblock %}</title>
+    <title>{% block title %}{{ business.system_name }}{% endblock %}</title>
 
     <!-- Google Fonts - Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -14,6 +14,7 @@
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    {% include 'base/_theme.html' %}
 
     <!-- Alpine.js -->
     <!-- calculator.js registra Alpine.data() en el evento 'alpine:init', así que
@@ -152,12 +153,12 @@
     {% block extra_css %}{% endblock %}
 </head>
 
-<body class="bg-gray-50 min-h-screen flex flex-col" x-data="{ sidebarOpen: false, isMobile: window.innerWidth < 768 }"
+<body class="bg-gray-50 min-h-screen flex flex-col theme-{{ business.theme }}" x-data="{ sidebarOpen: false, isMobile: window.innerWidth < 768 }"
     hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
     @resize.window="isMobile = window.innerWidth < 768">
 
     <!-- Barra superior optimizada -->
-    <header class="bg-blue-600 text-white shadow-lg sticky top-0 z-50">
+    <header class="app-header bg-blue-600 text-white shadow-lg sticky top-0 z-50">
         <div class="px-4 sm:px-6 lg:px-8 py-3">
             <div class="flex justify-between items-center">
                 <!-- Logo y menú hamburguesa -->
@@ -175,8 +176,12 @@
 
                     <a href="{% url 'dashboard' %}"
                         class="text-lg sm:text-xl font-bold hover:text-blue-200 transition-colors truncate">
-                        <span class="hidden sm:inline">Bodega de Leida</span>
-                        <span class="sm:hidden">Bodega</span>
+                        {% if business.logo %}
+                        <img src="{{ business.logo }}" alt="{{ business.name }}" class="h-10 sm:h-12 w-auto">
+                        {% else %}
+                        <span class="hidden sm:inline">{{ business.name }}</span>
+                        <span class="sm:hidden">{{ business.short_name }}</span>
+                        {% endif %}
                     </a>
                 </div>
 
@@ -298,7 +303,7 @@
 
         <!-- Sidebar optimizado CON RESTRICCIONES DE ROLES -->
         <aside
-            class="sidebar-transition fixed lg:static inset-y-0 left-0 z-50 w-72 sm:w-80 lg:w-64 bg-blue-800 text-white shadow-xl transform lg:transform-none"
+            class="app-sidebar sidebar-transition fixed lg:static inset-y-0 left-0 z-50 w-72 sm:w-80 lg:w-64 bg-blue-800 text-white shadow-xl transform lg:transform-none"
             :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'" x-trap="sidebarOpen">
             <div class="h-full flex flex-col">
                 <!-- Header del sidebar (móvil) -->
@@ -420,6 +425,7 @@
                         </li>
 
                         <!-- HORARIOS - Empleados y Administradores (Solo Lectura para Empleados) -->
+                        {% if business.features.schedules %}
                         <li>
                             <a href="{% url 'schedules:week_view' %}" @click="if (isMobile) sidebarOpen = false"
                                 class="flex items-center py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors group text-left w-full">
@@ -431,6 +437,7 @@
                                 <span class="font-medium">Horarios</span>
                             </a>
                         </li>
+                        {% endif %}
 
                         <!-- SOLO ADMINISTRADORES - RESTO DE MÓDULOS -->
                         {% if user.is_admin or user.is_superuser %}
@@ -482,6 +489,7 @@
                             </a>
                         </li>
 
+                        {% if business.features.performance %}
                         <li>
                             <a href="{% url 'performance:dashboard' %}" @click="if (isMobile) sidebarOpen = false"
                                class="flex items-center py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors group text-left w-full">
@@ -491,6 +499,7 @@
                                 <span class="font-medium">Rendimiento</span>
                             </a>
                         </li>
+                        {% endif %}
 
                         <li>
                             <a href="{% url 'accounts:user_list' %}" @click="if (isMobile) sidebarOpen = false"
@@ -545,6 +554,24 @@
                                         Respaldos
                                     </a>
                                 </li>
+                                {% if business.features.moto_parts %}
+                                <li>
+                                    <a href="{% url 'parts:moto_list' %}"
+                                        @click="if (isMobile) sidebarOpen = false"
+                                        class="block py-2 px-4 text-sm rounded-md hover:bg-blue-700 transition-colors">
+                                        Marcas y Modelos de Moto
+                                    </a>
+                                </li>
+                                {% endif %}
+                                {% if business.features.cash_usd %}
+                                <li>
+                                    <a href="{% url 'utils:store_settings' %}"
+                                        @click="if (isMobile) sidebarOpen = false"
+                                        class="block py-2 px-4 text-sm rounded-md hover:bg-blue-700 transition-colors">
+                                        Descuento en Efectivo $
+                                    </a>
+                                </li>
+                                {% endif %}
                                 <li>
                                     <a href="{% url 'inventory:category_list' %}"
                                         @click="if (isMobile) sidebarOpen = false"
@@ -561,7 +588,7 @@
                 <!-- Pie del sidebar -->
                 <div class="p-4 border-t border-blue-700">
                     <div class="text-center text-xs text-blue-200">
-                        <div class="hidden sm:block">Sistema de Bodega</div>
+                        <div class="hidden sm:block">{{ business.system_name }}</div>
                         <div>v1.0 - 2025</div>
                     </div>
                 </div>
@@ -615,7 +642,7 @@
     <footer class="bg-white border-t border-gray-200 p-4 mt-auto">
         <div class="text-center text-gray-600 text-sm">
             <p class="hidden sm:block">Ing Simón Briceño &copy; 2025 - Todos los derechos reservados</p>
-            <p class="sm:hidden">&copy; 2025 Sistema de Bodega</p>
+            <p class="sm:hidden">&copy; 2025 {{ business.system_name }}</p>
         </div>
     </footer>
 

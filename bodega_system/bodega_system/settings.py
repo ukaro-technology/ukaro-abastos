@@ -57,6 +57,7 @@ INSTALLED_APPS = [
     'utils',
     'performance',
     'schedules',
+    'parts',
 ]
 
 MIDDLEWARE = [
@@ -88,6 +89,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'utils.context_processors.exchange_rate',  # Para tasa de cambio global
+                'utils.context_processors.business',  # Marca y módulos del negocio
             ],
         },
     },

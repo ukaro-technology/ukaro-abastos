@@ -12,7 +12,8 @@ from django.core.exceptions import PermissionDenied
 from .models import Sale, SaleItem
 from inventory.models import Product, InventoryAdjustment, ProductCombo
 from customers.models import Customer, CustomerCredit
-from utils.models import ExchangeRate
+from utils.models import ExchangeRate, StoreSettings
+from bodega_system.business import feature
 from utils.decorators import sales_access_required
 
 @require_POST
@@ -32,6 +33,12 @@ def create_sale_api(request):
                 'error': 'No hay tasa de cambio configurada. Contacte al administrador.'
             }, status=400)
         
+        payment_method = data.get('payment_method', 'cash')
+        if payment_method not in dict(Sale.PAYMENT_METHODS) or (
+            payment_method == 'cash_usd' and not feature('cash_usd')
+        ):
+            return JsonResponse({'error': 'Método de pago no válido'}, status=400)
+
         # Obtener cliente si se especificó
         customer = None
         if data.get('customer_id'):
@@ -65,6 +72,18 @@ def create_sale_api(request):
                     total_usd += item_total_usd
                     total_bs += item_total_bs
             
+            # Descuento por pago en dólares en efectivo: se calcula en el servidor (nunca se
+            # confía en el total que manda el navegador) y el total en Bs pasa a ser el
+            # equivalente del total en USD ya descontado.
+            discount_percent = Decimal('0.00')
+            discount_usd = Decimal('0.00')
+            is_credit = data.get('is_credit', False)
+            if payment_method == 'cash_usd' and not is_credit:
+                discount_percent = StoreSettings.get().cash_usd_discount_percent
+                discount_usd = (total_usd * discount_percent / Decimal('100')).quantize(Decimal('0.01'))
+                total_usd -= discount_usd
+                total_bs = total_usd * current_exchange_rate.bs_to_usd
+
             # ⭐ CREAR VENTA CON AMBOS TOTALES, TASA UTILIZADA Y MÉTODO DE PAGO
             sale = Sale.objects.create(
                 customer=customer,
@@ -72,10 +91,12 @@ def create_sale_api(request):
                 total_usd=total_usd,
                 total_bs=total_bs,
                 exchange_rate_used=current_exchange_rate.bs_to_usd,
-                is_credit=data.get('is_credit', False),
+                is_credit=is_credit,
                 notes=data.get('notes', ''),
-                payment_method=data.get('payment_method', 'cash'),
-                mobile_reference=data.get('mobile_reference') if data.get('payment_method') == 'mobile' else None
+                payment_method=payment_method,
+                mobile_reference=data.get('mobile_reference') if payment_method == 'mobile' else None,
+                discount_percent=discount_percent,
+                discount_usd=discount_usd,
             )
             
             # Procesar ítems de venta
@@ -109,12 +130,19 @@ def create_sale_api(request):
                     notes=f'Crédito por venta #{sale.id}'
                 )
             
+            whatsapp_url = None
+            if feature('whatsapp_receipt'):
+                from .whatsapp import receipt_whatsapp_url
+                whatsapp_url = receipt_whatsapp_url(sale)
+
             return JsonResponse({
+                'whatsapp_url': whatsapp_url,
                 'id': sale.id,
                 'message': 'Venta creada exitosamente',
                 'total_usd': float(sale.total_usd),
                 'total_bs': float(sale.total_bs),
                 'exchange_rate': float(sale.exchange_rate_used),
+                'discount_usd': float(sale.discount_usd),
                 'user': request.user.get_full_name() or request.user.username
             })
             

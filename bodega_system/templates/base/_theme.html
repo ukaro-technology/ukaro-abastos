@@ -1,0 +1,45 @@
+{% comment %}
+Tema de colores según el perfil del negocio (bodega_system/business.py).
+
+Las plantillas usan la paleta `blue` de Tailwind como color principal en todo el sistema.
+En vez de reescribir cientos de clases, cada tema redefine esa paleta en la configuración
+del CDN de Tailwind, y ajusta con CSS la barra superior y el menú lateral.
+El tema 'default' no toca nada.
+{% endcomment %}
+{% if business.theme == 'supermoto' %}
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23000'/%3E%3Ctext x='32' y='44' font-family='Arial Black,Arial,sans-serif' font-size='30' font-style='italic' font-weight='900' text-anchor='middle' fill='%23FA0411'%3ESM%3C/text%3E%3C/svg%3E">
+<meta name="theme-color" content="#000000">
+<script>
+    // Rojo SuperMoto (#FA0411 = 600) en lugar del azul por defecto.
+    tailwind.config = {
+        theme: {
+            extend: {
+                colors: {
+                    blue: {
+                        50: '#fff1f1', 100: '#ffdfe0', 200: '#ffc5c7', 300: '#ff9da0',
+                        400: '#ff6469', 500: '#fd2b32', 600: '#fa0411', 700: '#d1000c',
+                        800: '#ac040f', 900: '#8e0a13', 950: '#4e0005',
+                    },
+                },
+            },
+        },
+    };
+</script>
+<style>
+    .theme-supermoto .app-header {
+        background-color: #000 !important;
+        border-bottom: 3px solid #fa0411;
+    }
+    .theme-supermoto .app-sidebar { background-color: #111111 !important; }
+    .theme-supermoto .app-sidebar .bg-blue-900,
+    .theme-supermoto .app-sidebar .bg-blue-700 { background-color: #1c1c1c !important; }
+    .theme-supermoto .app-sidebar .bg-blue-600 { background-color: #2a2a2a !important; }
+    .theme-supermoto .app-sidebar .border-blue-700,
+    .theme-supermoto .app-sidebar .border-blue-600 { border-color: #2f2f2f !important; }
+    .theme-supermoto .app-sidebar .text-blue-200,
+    .theme-supermoto .app-sidebar .text-blue-300 { color: #c8c8c8 !important; }
+    .theme-supermoto .app-sidebar a:hover,
+    .theme-supermoto .app-sidebar button:hover { background-color: #fa0411 !important; }
+    .theme-supermoto .app-sidebar a:hover svg { color: #fff !important; }
+</style>
+{% endif %}

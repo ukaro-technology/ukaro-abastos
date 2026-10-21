@@ -1,8 +1,11 @@
 {% extends 'base/base.html' %}
 
-{% block title %}Nueva Venta - Sistema de Bodega{% endblock %}
+{% block title %}Nueva Venta - {{ business.system_name }}{% endblock %}
 
 {% block extra_head %}
+{% if business.features.camera_scan %}
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+{% endif %}
 <style>
     .product-row:hover { background-color: #f3f4f6; }
     .unit-badge {
@@ -37,8 +40,18 @@
 
             <!-- 1. Código de barras -->
             <div>
-                <label for="barcode" class="block text-sm font-medium text-gray-700 mb-1">Código de Barras</label>
-                <div class="relative rounded-md shadow-sm">
+                <label for="barcode" class="block text-sm font-medium text-gray-700 mb-1">{% if business.features.moto_parts %}Código de barras o nº de parte{% else %}Código de Barras{% endif %}</label>
+                <div class="flex gap-2">
+                {% if business.features.camera_scan %}
+                <button type="button" @click="openScanner" aria-label="Escanear con la cámara"
+                    class="flex-shrink-0 inline-flex items-center justify-center w-12 rounded-md bg-gray-900 text-white hover:bg-blue-600 transition-colors">
+                    <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
+                    </svg>
+                </button>
+                {% endif %}
+                <div class="relative rounded-md shadow-sm flex-1">
                     <input
                         type="text" id="barcode"
                         x-model="barcode"
@@ -55,11 +68,12 @@
                         </button>
                     </div>
                 </div>
+                </div>
             </div>
 
             <!-- 2. Búsqueda por nombre -->
             <div class="relative">
-                <label for="name_search" class="block text-sm font-medium text-gray-700 mb-1">Buscar por Nombre</label>
+                <label for="name_search" class="block text-sm font-medium text-gray-700 mb-1">{% if business.features.moto_parts %}Buscar repuesto (pieza y moto){% else %}Buscar por Nombre{% endif %}</label>
                 <div class="relative rounded-md shadow-sm">
                     <input
                         type="text" id="name_search"
@@ -70,7 +84,7 @@
                         @keydown.up.prevent="navigateName(-1)"
                         @keydown.escape="clearNameSearch"
                         class="focus:ring-blue-500 focus:border-blue-500 block w-full pl-3 pr-10 py-2.5 text-base border-gray-300 rounded-md"
-                        placeholder="Escriba 2+ letras..."
+                        placeholder="{% if business.features.moto_parts %}Ej.: pastilla sbr{% else %}Escriba 2+ letras...{% endif %}"
                         autocomplete="off">
                     <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
                         <svg class="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -94,10 +108,21 @@
                                     x-text="'Stock: ' + product.stock"></span>
                             </div>
                             <div class="text-xs text-gray-500 mt-0.5">
+                                <template x-if="features.motoParts">
+                                    <span class="font-semibold text-gray-800" x-text="'$' + parseFloat(product.selling_price_usd).toFixed(2) + ' · '"></span>
+                                </template>
                                 <span x-text="'Bs ' + parseFloat(product.selling_price_bs).toFixed(2)"></span>
                                 <span class="mx-1">·</span>
                                 <span x-text="product.unit_display"></span>
                             </div>
+                            <template x-if="product.part">
+                                <div class="text-xs mt-0.5">
+                                    <span class="text-blue-700" x-text="'🏍️ ' + (product.part.compatibility || 'Sin motos registradas')"></span>
+                                    <span class="text-gray-400" x-show="product.part.part_brand || product.part.quality"
+                                          x-text="' · ' + [product.part.part_brand, product.part.quality].filter(Boolean).join(' ')"></span>
+                                    <span class="text-gray-400" x-show="product.part.location" x-text="' · 📍 ' + product.part.location"></span>
+                                </div>
+                            </template>
                         </div>
                     </template>
                 </div>
@@ -174,7 +199,8 @@
                                 <span :class="item.is_weight_based ? 'weight-badge' : 'unit-badge'" x-text="item.unit_display"></span>
                             </td>
                             <td class="px-5 py-3.5 text-center">
-                                <span class="text-sm text-gray-700">Bs <span x-text="parseFloat(item.price).toFixed(2)"></span></span>
+                                <div x-show="features.motoParts" class="text-sm font-semibold text-gray-900">$<span x-text="parseFloat(item.price_usd).toFixed(2)"></span></div>
+                                <span class="text-gray-700" :class="features.motoParts ? 'text-xs' : 'text-sm'">Bs <span x-text="parseFloat(item.price).toFixed(2)"></span></span>
                             </td>
                             <td class="px-5 py-3.5 text-center">
                                 <input
@@ -186,7 +212,8 @@
                                     class="quantity-input">
                             </td>
                             <td class="px-5 py-3.5 text-right">
-                                <span class="text-sm font-semibold text-gray-900">Bs <span x-text="parseFloat(item.subtotal).toFixed(2)"></span></span>
+                                <div x-show="features.motoParts" class="text-sm font-semibold text-gray-900">$<span x-text="(parseFloat(item.price_usd) * parseFloat(item.quantity || 0)).toFixed(2)"></span></div>
+                                <span :class="features.motoParts ? 'text-xs text-gray-500' : 'text-sm font-semibold text-gray-900'">Bs <span x-text="parseFloat(item.subtotal).toFixed(2)"></span></span>
                             </td>
                             <td class="px-5 py-3.5 text-center">
                                 <button @click="removeItem(index)" type="button" class="text-red-500 hover:text-red-700 p-1 rounded">
@@ -234,8 +261,19 @@
                                 class="quantity-input">
                         </div>
                         <div class="text-right">
-                            <div class="text-xs text-gray-400">Bs <span x-text="parseFloat(item.price).toFixed(2)"></span> c/u</div>
-                            <div class="text-sm font-bold text-gray-900">Bs <span x-text="parseFloat(item.subtotal).toFixed(2)"></span></div>
+                            <template x-if="features.motoParts">
+                                <div>
+                                    <div class="text-xs text-gray-400">$<span x-text="parseFloat(item.price_usd).toFixed(2)"></span> c/u</div>
+                                    <div class="text-sm font-bold text-gray-900">$<span x-text="(parseFloat(item.price_usd) * parseFloat(item.quantity || 0)).toFixed(2)"></span></div>
+                                    <div class="text-xs text-gray-500">Bs <span x-text="parseFloat(item.subtotal).toFixed(2)"></span></div>
+                                </div>
+                            </template>
+                            <template x-if="!features.motoParts">
+                                <div>
+                                    <div class="text-xs text-gray-400">Bs <span x-text="parseFloat(item.price).toFixed(2)"></span> c/u</div>
+                                    <div class="text-sm font-bold text-gray-900">Bs <span x-text="parseFloat(item.subtotal).toFixed(2)"></span></div>
+                                </div>
+                            </template>
                         </div>
                     </div>
                 </div>
@@ -257,7 +295,10 @@
                     <select id="payment_method" x-model="paymentMethod" :required="!isCredit"
                         class="block w-full text-base border-gray-300 rounded-md py-2.5 shadow-sm focus:ring-blue-500 focus:border-blue-500">
                         <option value="card">💳 Punto de Venta</option>
-                        <option value="cash">💵 Efectivo</option>
+                        <option value="cash">💵 Efectivo{% if business.features.cash_usd %} Bs{% endif %}</option>
+                        {% if business.features.cash_usd %}
+                        <option value="cash_usd">💵 Efectivo $ (con descuento)</option>
+                        {% endif %}
                         <option value="mobile">📱 Pago Móvil</option>
                     </select>
                 </div>
@@ -308,17 +349,41 @@
                             <span>Productos:</span>
                             <span x-text="items.length"></span>
                         </div>
-                        <div class="flex justify-between text-sm opacity-90">
+                        <div class="flex justify-between text-sm opacity-90" x-show="!features.motoParts">
                             <span>Subtotal:</span>
                             <span>Bs <span x-text="parseFloat(subtotal).toFixed(2)"></span></span>
                         </div>
-                        <div class="flex justify-between text-xl font-bold border-t border-white/25 pt-3">
+                        <div class="flex justify-between text-xl font-bold border-t border-white/25 pt-3" x-show="!features.motoParts">
                             <span>Total:</span>
                             <span>Bs <span x-text="parseFloat(total).toFixed(2)"></span></span>
                         </div>
-                        <div class="text-xs opacity-75 text-right" x-show="exchangeRate > 0">
+                        <div class="text-xs opacity-75 text-right" x-show="exchangeRate > 0 && !features.motoParts">
                             ≈ USD $<span x-text="parseFloat(total / exchangeRate).toFixed(2)"></span>
                         </div>
+                        <template x-if="features.motoParts">
+                            <div class="border-t border-white/25 pt-3">
+                                <div class="flex justify-between text-xl font-bold" :class="cashUsdActive ? 'opacity-70 line-through' : ''">
+                                    <span>Total:</span>
+                                    <span x-text="'$' + totalUsd.toFixed(2)"></span>
+                                </div>
+                                <div class="text-right text-sm opacity-90" x-show="!cashUsdActive">
+                                    Bs <span x-text="parseFloat(total).toFixed(2)"></span>
+                                    <span class="block text-xs opacity-75" x-text="'Tasa BCV: ' + exchangeRate.toFixed(2) + ' Bs/$'"></span>
+                                </div>
+                            </div>
+                        </template>
+                        <template x-if="cashUsdActive">
+                            <div class="mt-3 bg-white/15 rounded-lg p-3">
+                                <div class="flex justify-between text-sm">
+                                    <span x-text="'Descuento efectivo $ (' + cashUsdDiscountPercent + '%)'"></span>
+                                    <span x-text="'-$' + cashUsdDiscount.toFixed(2)"></span>
+                                </div>
+                                <div class="flex justify-between text-2xl font-bold mt-1">
+                                    <span>A cobrar:</span>
+                                    <span x-text="'$' + (totalUsd - cashUsdDiscount).toFixed(2)"></span>
+                                </div>
+                            </div>
+                        </template>
                     </div>
                 </div>
                 <button
@@ -340,6 +405,51 @@
                         <span x-text="submitting ? 'Procesando...' : 'Completar Venta'"></span>
                     </div>
                 </button>
+            </div>
+        </div>
+
+        {% if business.features.camera_scan %}
+        <!-- ── Modal escáner con cámara ───────────────────────────────── -->
+        <div x-show="showScanner" x-cloak
+             class="fixed inset-0 bg-black bg-opacity-80 z-50 flex items-center justify-center p-4">
+            <div class="w-full max-w-md bg-white rounded-xl shadow-2xl overflow-hidden">
+                <div class="bg-gray-900 text-white px-4 py-3 flex items-center justify-between">
+                    <span class="font-semibold">Apunta al código de barras</span>
+                    <button type="button" @click="closeScanner" class="p-1 hover:text-blue-400" aria-label="Cerrar">
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                </div>
+                <div id="barcode-reader" class="w-full bg-black"></div>
+                <p class="text-xs text-gray-500 text-center p-3" x-text="scannerMessage"></p>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- ── Modal venta completada ─────────────────────────────────── -->
+        <div x-show="completedSale" x-cloak
+             class="fixed inset-0 bg-gray-700 bg-opacity-60 z-50 flex items-center justify-center p-4">
+            <div class="w-full max-w-sm bg-white rounded-xl shadow-2xl p-6 text-center">
+                <div class="mx-auto h-14 w-14 rounded-full bg-green-100 flex items-center justify-center mb-3">
+                    <svg class="h-8 w-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                </div>
+                <h3 class="text-lg font-semibold text-gray-900" x-text="'Venta #' + completedSale?.id + ' registrada'"></h3>
+                <p class="text-2xl font-bold text-gray-900 mt-2" x-text="'$' + (completedSale?.total_usd || 0).toFixed(2)"></p>
+                <p class="text-sm text-gray-500" x-text="'Bs ' + (completedSale?.total_bs || 0).toFixed(2)"></p>
+                <div class="mt-5 space-y-2">
+                    <a :href="completedSale?.whatsapp_url" target="_blank" rel="noopener" x-show="completedSale?.whatsapp_url"
+                       class="w-full inline-flex items-center justify-center bg-[#25D366] hover:bg-[#1ebe5b] text-white font-semibold py-3 rounded-lg">
+                        {% include 'sales/_whatsapp_icon.html' %}
+                        Enviar comprobante por WhatsApp
+                    </a>
+                    <a :href="'/sales/' + completedSale?.id + '/receipt/'" target="_blank"
+                       class="w-full inline-flex items-center justify-center border border-gray-300 text-gray-700 font-medium py-2.5 rounded-lg hover:bg-gray-50">
+                        Ver comprobante PDF
+                    </a>
+                    <button type="button" @click="completedSale = null; focusBarcodeInput()"
+                        class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg">
+                        Nueva venta
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -423,6 +533,16 @@
             mobileReference: '',
             exchangeRate: 1,
 
+            // Módulos del negocio y descuento por efectivo $
+            features: { motoParts: false, cashUsd: false, cameraScan: false, whatsappReceipt: false },
+            cashUsdDiscountPercent: 0,
+
+            // Escáner con cámara y venta completada
+            showScanner: false,
+            scanner: null,
+            scannerMessage: '',
+            completedSale: null,
+
             // Modal de cantidad
             showQuantityModal: false,
             pendingProduct: null,
@@ -433,6 +553,58 @@
                 return this.items.reduce((sum, item) => sum + parseFloat(item.subtotal || 0), 0);
             },
             get total() { return this.subtotal; },
+            get totalUsd() {
+                return this.items.reduce((sum, item) => sum + parseFloat(item.price_usd || 0) * parseFloat(item.quantity || 0), 0);
+            },
+            get cashUsdActive() {
+                return this.features.cashUsd && this.paymentMethod === 'cash_usd' && !this.isCredit && this.items.length > 0;
+            },
+            // Mismo redondeo que el servidor (sales/api_views.py), que es quien manda
+            get cashUsdDiscount() {
+                return this.cashUsdActive ? Math.round(this.totalUsd * this.cashUsdDiscountPercent) / 100 : 0;
+            },
+
+            // ── Escáner con cámara (html5-qrcode) ─────────────────────
+            async openScanner() {
+                if (typeof Html5Qrcode === 'undefined') { alert('No se pudo cargar el escáner. Revise la conexión.'); return; }
+                this.showScanner = true;
+                this.scannerMessage = 'Iniciando cámara...';
+                await this.$nextTick();
+                const formats = Html5QrcodeSupportedFormats;
+                this.scanner = new Html5Qrcode('barcode-reader', {
+                    formatsToSupport: [formats.EAN_13, formats.EAN_8, formats.UPC_A, formats.UPC_E,
+                                       formats.CODE_128, formats.CODE_39, formats.ITF, formats.QR_CODE],
+                    verbose: false,
+                });
+                try {
+                    await this.scanner.start(
+                        { facingMode: 'environment' },
+                        { fps: 10, qrbox: { width: 260, height: 140 } },
+                        (decodedText) => this.onCodeScanned(decodedText),
+                        () => {}
+                    );
+                    this.scannerMessage = 'Mantén el código dentro del recuadro';
+                } catch (err) {
+                    this.scannerMessage = 'No se pudo abrir la cámara. Revisa el permiso del navegador.';
+                }
+            },
+
+            async onCodeScanned(code) {
+                if (!this.showScanner) return;
+                await this.closeScanner();
+                if (navigator.vibrate) navigator.vibrate(80);
+                this.barcode = code;
+                this.scanBarcode();
+            },
+
+            async closeScanner() {
+                this.showScanner = false;
+                if (this.scanner) {
+                    try { await this.scanner.stop(); } catch (e) {}
+                    try { this.scanner.clear(); } catch (e) {}
+                    this.scanner = null;
+                }
+            },
 
             // ── Barcode ──────────────────────────────────────────────────
             async scanBarcode() {
@@ -535,6 +707,7 @@
                     name: product.name,
                     barcode: product.barcode,
                     price: product.selling_price_bs,
+                    price_usd: product.selling_price_usd || 0,
                     quantity: quantity,
                     subtotal: product.selling_price_bs * quantity,
                     stock: product.stock,
@@ -653,9 +826,16 @@
                     }
                     const result = await response.json();
                     if (result.id) {
-                        window.open(`/sales/${result.id}/receipt/`, '_blank');
-                        this.resetSale();
-                        this.focusBarcodeInput();
+                        if (this.features.whatsappReceipt) {
+                            // En el teléfono window.open después de un fetch lo bloquea el
+                            // navegador: se muestra un resumen con los enlaces.
+                            this.resetSale();
+                            this.completedSale = result;
+                        } else {
+                            window.open(`/sales/${result.id}/receipt/`, '_blank');
+                            this.resetSale();
+                            this.focusBarcodeInput();
+                        }
                     }
                 } catch (error) {
                     alert(error.message || 'Error al procesar la venta');
@@ -689,6 +869,10 @@
                 const safeData = getSafeData();
                 if (safeData.exchangeRate && typeof safeData.exchangeRate === 'number' && safeData.exchangeRate > 0) {
                     this.exchangeRate = safeData.exchangeRate;
+                }
+                if (safeData.features) this.features = { ...this.features, ...safeData.features };
+                if (typeof safeData.cashUsdDiscountPercent === 'number') {
+                    this.cashUsdDiscountPercent = safeData.cashUsdDiscountPercent;
                 }
                 this.focusBarcodeInput();
             }

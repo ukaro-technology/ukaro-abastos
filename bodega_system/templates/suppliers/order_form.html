@@ -3,7 +3,7 @@
 {% load static %}
 
 {% block title %}
-{% if form.instance.pk %}Editar Orden{% else %}Nueva Orden de Compra{% endif %} - Sistema de Bodega
+{% if form.instance.pk %}Editar Orden{% else %}Nueva Orden de Compra{% endif %} - {{ business.system_name }}
 {% endblock %}
 
 {% block extra_head %}

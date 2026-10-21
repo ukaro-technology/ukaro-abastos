@@ -91,6 +91,16 @@ ukaro-abastos/
 **NO tiene multi-tenant.** Este proyecto es single-tenant (una sola bodega).
 No usa Organization/TenantMiddleware/for_tenant().
 
+### Perfiles de negocio (una instalación por cliente)
+El mismo código sirve a varios clientes, cada uno con su propia instalación y base de datos.
+`BUSINESS_PROFILE` elige el perfil en `bodega_system/business.py`:
+- `bodega` (por defecto) — Bodega de Leida, comportamiento original.
+- `motoparts` — SuperMoto Speed (repuestos de moto): app `parts`, Efectivo $ con descuento,
+  escáner con cámara, comprobante por WhatsApp. Spec: `docs/specs/repuestos-moto-demo.md`.
+
+Módulos opcionales con `feature('nombre')` en Python y `business.features.nombre` en plantillas.
+Todo cambio debe mantener el perfil `bodega` igual que antes.
+
 ---
 
 ## PKs

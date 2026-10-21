@@ -2,7 +2,7 @@
 
 from django import forms
 from django.utils import timezone
-from .models import ExchangeRate
+from .models import ExchangeRate, StoreSettings
 
 
 class ExchangeRateForm(forms.ModelForm):
@@ -77,3 +77,24 @@ class ExchangeRateForm(forms.ModelForm):
                 self._existing_rate_to_update = existing_rate
 
         return cleaned_data
+
+class StoreSettingsForm(forms.ModelForm):
+    """Ajustes del negocio editables por el administrador"""
+
+    class Meta:
+        model = StoreSettings
+        fields = ['cash_usd_discount_percent']
+        widgets = {
+            'cash_usd_discount_percent': forms.NumberInput(attrs={
+                'class': 'w-full px-4 py-3 text-base border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500',
+                'step': '0.01',
+                'min': '0',
+                'max': '90',
+            }),
+        }
+
+    def clean_cash_usd_discount_percent(self):
+        value = self.cleaned_data['cash_usd_discount_percent']
+        if value < 0 or value > 90:
+            raise forms.ValidationError('El descuento debe estar entre 0% y 90%.')
+        return value

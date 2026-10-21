@@ -13,6 +13,9 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
 
 from .models import Product, ProductCombo, Category, InventoryAdjustment
+from .search import search_products
+from bodega_system.business import feature
+from parts.models import part_summary
 from django.db.models import F
 
 @api_view(['GET'])
@@ -109,12 +112,7 @@ def product_search_api(request):
         
         # Filtros de búsqueda
         if query:
-            products = products.filter(
-                Q(name__icontains=query) |
-                Q(barcode__icontains=query) |
-                Q(description__icontains=query) |
-                Q(category__name__icontains=query)
-            )
+            products = search_products(products, query)
         
         if category_id:
             products = products.filter(category_id=category_id)
@@ -127,6 +125,12 @@ def product_search_api(request):
             elif stock_filter == 'normal':
                 products = products.filter(stock__gt=F('min_stock'))
         
+        moto_parts = feature('moto_parts')
+        if moto_parts:
+            products = products.select_related('part_info').prefetch_related(
+                'part_info__compatible_models__brand'
+            )
+
         # Ordenar por relevancia (nombre primero, luego por stock)
         products = products.order_by('name', '-stock')[:limit]
         
@@ -149,7 +153,7 @@ def product_search_api(request):
                 'barcode': product.barcode,
                 'category': product.category.name,
                 'selling_price_bs': float(product.get_current_price_bs()),
-                'selling_price_usd': float(product.selling_price_usd),
+                'selling_price_usd': float(product.get_current_price_usd()),
                 'stock': float(product.stock),
                 'min_stock': float(product.min_stock),
                 'unit_display': product.get_unit_type_display(),
@@ -159,6 +163,7 @@ def product_search_api(request):
                 'stock_color': stock_color,
                 'image': product.image.url if product.image else None,
                 'is_active': product.is_active,
+                'part': part_summary(product) if moto_parts else None,
             })
         
         return JsonResponse({

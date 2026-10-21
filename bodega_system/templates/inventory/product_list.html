@@ -1,7 +1,7 @@
 <!-- templates/inventory/product_list.html - VERSIÓN RESPONSIVA OPTIMIZADA -->
 {% extends 'base/base.html' %}
 
-{% block title %}Inventario - Sistema de Bodega{% endblock %}
+{% block title %}Inventario - {{ business.system_name }}{% endblock %}
 
 {% block content %}
 <!-- HEADER RESPONSIVO -->
@@ -58,7 +58,7 @@
                     name="q" 
                     value="{{ search_query|default:'' }}" 
                     class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full text-base sm:text-sm border-gray-300 rounded-md min-h-[44px] sm:min-h-[38px] px-3 py-2"
-                    placeholder="Nombre, código, descripción...">
+                    placeholder="{% if business.features.moto_parts %}Ej.: pastilla sbr, bujía horse...{% else %}Nombre, código, descripción...{% endif %}">
             </div>
             <div class="space-y-1">
                 <label for="category" class="block text-sm font-medium text-gray-700">Categoría</label>
@@ -142,6 +142,9 @@
                         <div>
                             <div class="text-sm font-medium text-gray-900">{{ product.name }}</div>
                             <div class="text-xs text-gray-500">{{ product.barcode }}</div>
+                            {% if business.features.moto_parts and product.part_info %}
+                            <div class="text-xs text-blue-700 mt-0.5 truncate max-w-xs">🏍️ {{ product.part_info.compatibility_display|default:"Sin motos registradas" }}</div>
+                            {% endif %}
                         </div>
                     </div>
                 </td>
@@ -161,11 +164,11 @@
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-right">
                     {% if product.stock <= 0 %}
-                        <span class="font-medium text-red-600">{{ product.stock }}</span>
+                        <span class="font-medium text-red-600">{{ product.stock|floatformat:"-3" }}</span>
                     {% elif product.stock <= product.min_stock %}
-                        <span class="font-medium text-yellow-600">{{ product.stock }}</span>
+                        <span class="font-medium text-yellow-600">{{ product.stock|floatformat:"-3" }}</span>
                     {% else %}
-                        <span class="font-medium text-green-600">{{ product.stock }}</span>
+                        <span class="font-medium text-green-600">{{ product.stock|floatformat:"-3" }}</span>
                     {% endif %}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-center">
@@ -235,6 +238,9 @@
                     <h3 class="text-sm font-medium text-gray-900 truncate">{{ product.name }}</h3>
                     <p class="text-xs text-gray-500">{{ product.barcode }}</p>
                     <p class="text-xs text-gray-500">{{ product.category.name }}</p>
+                    {% if business.features.moto_parts and product.part_info %}
+                    <p class="text-xs text-blue-700 truncate">🏍️ {{ product.part_info.compatibility_display|default:"Sin motos registradas" }}</p>
+                    {% endif %}
                 </div>
             </div>
             <!-- Badge de estado -->
@@ -276,12 +282,12 @@
                     {% if product.stock <= 0 %}text-red-600
                     {% elif product.stock <= product.min_stock %}text-yellow-600
                     {% else %}text-green-600{% endif %}">
-                    {{ product.stock }}
+                    {{ product.stock|floatformat:"-3" }}
                 </p>
             </div>
             <div>
                 <span class="text-xs font-medium text-gray-500">Stock Mínimo:</span>
-                <p class="text-sm text-gray-900">{{ product.min_stock }}</p>
+                <p class="text-sm text-gray-900">{{ product.min_stock|floatformat:"-3" }}</p>
             </div>
         </div>
         

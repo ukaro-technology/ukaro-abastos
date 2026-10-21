@@ -32,7 +32,17 @@ def product_by_barcode(request, barcode):
         # Importación aquí para evitar importación circular
         from inventory.models import Product
         
-        product = get_object_or_404(Product, barcode=barcode, is_active=True)
+        from bodega_system.business import feature
+        from parts.models import part_summary
+
+        product = Product.objects.filter(barcode=barcode, is_active=True).first()
+        if product is None and feature('moto_parts'):
+            # Repuestos sin código de barras: se aceptan por su número de parte
+            product = Product.objects.filter(
+                part_info__part_number__iexact=barcode, is_active=True
+            ).first()
+        if product is None:
+            return JsonResponse({'error': 'Producto no encontrado'}, status=404)
 
         # ⭐ OBTENER TASA DE CAMBIO ACTUAL
         latest_rate = ExchangeRate.get_latest_rate()
@@ -56,6 +66,7 @@ def product_by_barcode(request, barcode):
             'is_weight_based': product.is_weight_based,
             # Información adicional
             'exchange_rate': float(latest_rate.bs_to_usd) if latest_rate else None,
+            'part': part_summary(product) if feature('moto_parts') else None,
         })
     except Exception as e:
         return JsonResponse({

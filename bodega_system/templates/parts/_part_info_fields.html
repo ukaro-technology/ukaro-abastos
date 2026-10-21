@@ -1,0 +1,63 @@
+{% comment %}
+Sección "Datos del repuesto" del formulario de producto. Solo se incluye cuando el módulo
+'moto_parts' está activo (la vista pasa `part_form`, con prefijo 'part').
+{% endcomment %}
+<div class="bg-white rounded-xl shadow-lg overflow-hidden" x-data="{ universal: {% if part_form.is_universal.value %}true{% else %}false{% endif %}, filter: '' }">
+    <div class="bg-gradient-to-r from-gray-900 to-gray-800 p-6 border-b-4 border-blue-600">
+        <h2 class="text-xl font-semibold text-white flex items-center">
+            <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+            </svg>
+            Datos del Repuesto
+        </h2>
+    </div>
+
+    <div class="p-6 space-y-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {% for field in part_form %}
+            {% if field.name != 'compatible_models' and field.name != 'is_universal' %}
+            <div>
+                <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-2">{{ field.label }}</label>
+                {{ field }}
+                {% if field.help_text %}<p class="mt-1 text-xs text-gray-500">{{ field.help_text }}</p>{% endif %}
+                {% for error in field.errors %}<p class="mt-1 text-sm text-red-600">{{ error }}</p>{% endfor %}
+            </div>
+            {% endif %}
+            {% endfor %}
+        </div>
+
+        <div>
+            <label class="flex items-center gap-3">
+                <input type="checkbox" name="{{ part_form.is_universal.html_name }}" x-model="universal"
+                       class="h-5 w-5 text-blue-600 border-gray-300 rounded" {% if part_form.is_universal.value %}checked{% endif %}>
+                <span class="text-sm font-medium text-gray-700">Universal: le sirve a cualquier moto</span>
+            </label>
+        </div>
+
+        <div x-show="!universal">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
+                <span class="block text-sm font-medium text-gray-700">Motos compatibles</span>
+                <input type="text" x-model="filter" placeholder="Filtrar modelos..."
+                       class="px-3 py-2 text-base border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:w-56">
+            </div>
+            {% for brand, models in part_form.models_by_brand %}
+            <div class="mb-4">
+                <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">{{ brand.name }}</p>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                    {% for moto, checked in models %}
+                    <label class="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 hover:border-blue-400 cursor-pointer"
+                           x-show="!filter || '{{ moto|escapejs }}'.toLowerCase().includes(filter.toLowerCase())">
+                        <input type="checkbox" name="{{ part_form.compatible_models.html_name }}" value="{{ moto.pk }}"
+                               class="h-4 w-4 text-blue-600 border-gray-300 rounded" {% if checked %}checked{% endif %}>
+                        <span class="text-sm text-gray-800">{{ moto.name }}{% if moto.displacement_cc %} <span class="text-gray-400">· {{ moto.displacement_cc }} cc</span>{% endif %}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+            {% empty %}
+            <p class="text-sm text-gray-500">No hay modelos de moto registrados. Agrégalos en Configuración → Marcas y Modelos de Moto.</p>
+            {% endfor %}
+        </div>
+    </div>
+</div>

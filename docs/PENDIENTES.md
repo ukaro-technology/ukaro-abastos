@@ -1,6 +1,28 @@
 # Pendientes — Ukaro Abastos
 
 ## Decisiones activas
+- **EN CURSO (2026-10-21) — Demo SuperMoto Speed (tienda de repuestos de moto), implementado en
+  rama `ccr-2db2fa98-fx0vm7`, sin desplegar.** Spec: `docs/specs/repuestos-moto-demo.md`.
+  Cliente nuevo de Simón (apertura ~1 nov 2026). Mismo código para los dos negocios: perfil
+  `BUSINESS_PROFILE` (`bodega` por defecto = Leida sin cambios, `motoparts` = SuperMoto) en
+  `bodega_system/business.py`; app nueva `parts` (motos y compatibilidad); método de pago
+  "Efectivo $" con descuento; búsqueda palabra por palabra sin tildes; escáner con cámara;
+  comprobante por WhatsApp; datos de ejemplo con `seed_motoparts_demo`.
+  - **Cambios visibles para Leida** (solo mejoras, sin cambio de esquema en sus tablas): búsqueda
+    de inventario/POS por palabras y sin tildes; stock en la lista sin ceros de más (23 en vez
+    de 23,000); textos "Sistema de Bodega" ahora salen del perfil (mismo texto).
+  - **Migraciones nuevas** (aplican también en el servidor de Leida al desplegar): `parts.0001`,
+    `sales.0005` (campos de descuento con default 0), `utils.0002` (StoreSettings).
+  - `.gitignore` tenía `parts/` (plantilla de Python/buildout) que ignoraba la app: se cambió a
+    `/parts/`.
+  - **Pendiente:** Simón publica el demo en PythonAnywhere (`docs/deploy/pythonanywhere-demo.md`)
+    y lo presenta con `docs/demo-supermoto-guion.md`; después el cliente llena el formulario de
+    levantamiento (Google Forms, script fuera del repo) y con eso se escribe el spec de la
+    versión real (importación Excel, devoluciones, precio mecánicos, etc.).
+  - Verificado con Chromium en viewport de teléfono (por primera vez en el proyecto, con
+    capturas), pero las CDN (Tailwind, Alpine, html5-qrcode) estaban bloqueadas en el entorno:
+    se sirvieron las mismas versiones desde npm solo para la prueba. **El escáner con cámara
+    real no se pudo probar** (no hay cámara): probar en el teléfono antes del demo.
 - **COMPLETADO (2026-09-07) — Spec "Horarios de Empleados y Días Libres", implementada.**
   (`docs/specs/horarios-empleados.md`). Pedido de Simón, tarea anotada en Platform ("Horario de
   empleados y días libres"). App nueva `schedules`, 32 tests nuevos en verde, 0 regresiones

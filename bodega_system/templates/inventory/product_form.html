@@ -2,7 +2,7 @@
 
 {% load l10n %}
 
-{% block title %}{{ title }} - Sistema de Bodega{% endblock %}
+{% block title %}{{ title }} - {{ business.system_name }}{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -410,7 +410,7 @@
 
                                 <div class="form-group">
                                     <label for="{{ form.barcode.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-2">
-                                        Código de Barras *
+                                        {% if business.features.moto_parts %}Código (de barras o interno) *{% else %}Código de Barras *{% endif %}
                                     </label>
                                     <div class="relative">
                                         <input type="text"
@@ -430,7 +430,7 @@
                                     {% if form.barcode.errors %}
                                         <p class="mt-1 text-sm text-red-600">{{ form.barcode.errors.0 }}</p>
                                     {% endif %}
-                                    <p class="mt-1 text-xs text-gray-500">Haz clic en el icono para generar automáticamente</p>
+                                    <p class="mt-1 text-xs text-gray-500">{% if business.features.moto_parts %}Si la pieza no trae código de barras, haz clic en el icono para generar uno interno{% else %}Haz clic en el icono para generar automáticamente{% endif %}</p>
                                 </div>
                             </div>
 
@@ -771,6 +771,10 @@
                     </div>
                 </div>
             </div>
+
+            {% if part_form %}
+            {% include 'parts/_part_info_fields.html' %}
+            {% endif %}
 
             <!-- PRECIOS AL MAYOR EN USD (no disponible en modo "Precio estable en Bs" — no tiene
                  un precio al mayor fijo equivalente, ver ProductForm.clean()) -->

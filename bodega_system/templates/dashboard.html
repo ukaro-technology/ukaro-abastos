@@ -2,7 +2,7 @@
 {% extends 'base/base.html' %}
 {% load formato_bs %}
 
-{% block title %}Dashboard - Sistema de Bodega{% endblock %}
+{% block title %}Dashboard - {{ business.system_name }}{% endblock %}
 
 {% block content %}
 <!-- HEADER PRINCIPAL CON INDICADOR DE ROL -->
@@ -25,7 +25,7 @@
         </div>
         <p class="text-gray-600 text-sm sm:text-base">
             {% if user.is_admin or user.is_superuser %}
-            Bienvenido al Sistema de Gestión de Bodega de Leida. Como administrador, tienes acceso completo a todas las funciones.
+            {{ business.welcome_text }} Como administrador, tienes acceso completo a todas las funciones.
             {% else %}
             Bienvenido al Sistema de Ventas. Como empleado, puedes gestionar ventas y clientes.
             {% endif %}

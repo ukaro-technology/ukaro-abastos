@@ -1,7 +1,7 @@
 <!-- templates/403.html - PÁGINA DE ERROR DE PERMISOS -->
 {% extends 'base/base.html' %}
 
-{% block title %}Acceso Denegado - Sistema de Bodega{% endblock %}
+{% block title %}Acceso Denegado - {{ business.system_name }}{% endblock %}
 
 {% block content %}
 <div class="min-h-96 flex items-center justify-center">
@@ -128,7 +128,7 @@
         <!-- Footer informativo -->
         <div class="border-t border-gray-200 pt-6">
             <p class="text-gray-500 text-xs">
-                Sistema de Bodega - Control de Acceso por Roles<br>
+                {{ business.system_name }} - Control de Acceso por Roles<br>
                 Si crees que esto es un error, contacta al administrador del sistema.
             </p>
         </div>

@@ -9,3 +9,14 @@ def exchange_rate(request):
     return {
         'latest_exchange_rate': latest_rate,
     }
+
+def business(request):
+    """
+    Agrega el perfil del negocio (marca, tema y módulos activos) a todas las plantillas.
+    Ver bodega_system/business.py.
+    """
+    from bodega_system.business import get_business
+
+    return {
+        'business': get_business(),
+    }

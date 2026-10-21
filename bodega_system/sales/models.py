@@ -12,6 +12,9 @@ class Sale(models.Model):
         ('card', 'Punto de Venta'),
         ('cash', 'Efectivo'),
         ('mobile', 'Pago Móvil'),
+        # Solo se ofrece si el módulo 'cash_usd' está activo (bodega_system/business.py):
+        # dólares en efectivo, con el descuento de utils.StoreSettings.
+        ('cash_usd', 'Efectivo $'),
     )
     
     customer = models.ForeignKey(
@@ -67,6 +70,21 @@ class Sale(models.Model):
         verbose_name="Referencia de Pago Móvil"
     )
     
+    # Descuento por pago en dólares en efectivo (método 'cash_usd'). total_usd y total_bs ya
+    # vienen con el descuento aplicado; estos campos guardan cuánto fue y a qué porcentaje.
+    discount_percent = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=0,
+        verbose_name="Descuento (%)"
+    )
+    discount_usd = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        verbose_name="Descuento (USD)"
+    )
+
     is_credit = models.BooleanField(
         default=False,
         verbose_name="Es Crédito"
@@ -98,7 +116,8 @@ class Sale(models.Model):
         icons = {
             'cash': '💵',
             'card': '💳',
-            'mobile': '📱'
+            'mobile': '📱',
+            'cash_usd': '💵',
         }
         return icons.get(self.payment_method, '💰')
     

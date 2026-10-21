@@ -2,7 +2,7 @@
 {% extends 'base/base.html' %}
 
 {% block title %}
-    {% if form.instance.pk %}Editar Combo{% else %}Nuevo Combo{% endif %} - Sistema de Bodega
+    {% if form.instance.pk %}Editar Combo{% else %}Nuevo Combo{% endif %} - {{ business.system_name }}
 {% endblock %}
 
 {% block extra_head %}
