@@ -23,7 +23,24 @@ No hay que configurar nada a mano. Toma unos 10 minutos, casi todo esperando el 
 El dominio de Render se agrega solo a `ALLOWED_HOSTS` y `CSRF_TRUSTED_ORIGINS` (variable
 `RENDER_EXTERNAL_HOSTNAME`, ver `settings.py`), y Render ya da HTTPS, que la cámara necesita.
 
-## Actualizar
+## Si el servicio se creó como "Web Service" (Docker) en vez de Blueprint
+
+Render detecta el `Dockerfile` y crea un servicio Docker **sin** las variables del Blueprint
+(por eso no pide la contraseña). Para que funcione, en ese servicio:
+
+1. **Settings → Branch**: `ccr-2db2fa98-fx0vm7` (en `main` todavía no está SuperMoto).
+2. **Environment → Add Environment Variable**:
+   - `BUSINESS_PROFILE` = `motoparts`
+   - `DEBUG` = `False`  ← importante: sin esto se ven errores con datos internos
+   - `SECRET_KEY` = (botón *Generate*)
+   - `DEMO_PASSWORD` = la contraseña que quieras para `dueno`, `papa` y `vendedor`
+3. **Manual Deploy → Deploy latest commit**.
+
+El contenedor migra, junta los estáticos y carga el demo al arrancar
+(`bodega_system/scripts/start_web.sh`). Sin base PostgreSQL usa SQLite dentro del contenedor:
+**cada vez que el servicio se duerme o se redespliega, el demo vuelve a quedar como nuevo**
+(se pierde lo que se haya probado). Para que los datos duren, usa el Blueprint.
+
 
 Cada `git push` a la rama `ccr-2db2fa98-fx0vm7` redespliega solo. Si la rama cambia (por
 ejemplo, al integrarla a `main`), cambia `branch:` en `render.yaml` o en la configuración del

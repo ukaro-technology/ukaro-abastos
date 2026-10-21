@@ -22,9 +22,6 @@ COPY bodega_system/ .
 
 EXPOSE 8000
 
-CMD ["gunicorn", "bodega_system.wsgi:application", \
-     "--bind", "0.0.0.0:8000", \
-     "--workers", "3", \
-     "--timeout", "120", \
-     "--access-logfile", "-", \
-     "--error-logfile", "-"]
+# Migra, junta los estáticos y arranca gunicorn (ver el script). docker-compose.yml
+# (servidor de Leida) reemplaza este comando con el suyo.
+CMD ["sh", "scripts/start_web.sh"]
