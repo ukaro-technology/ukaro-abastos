@@ -40,9 +40,9 @@ python manage.py seed_motoparts_demo --barcodes-pdf ~/etiquetas_demo.pdf
 python manage.py collectstatic --noinput
 ```
 
-El comando crea los usuarios `dueno`, `papa` (administradores) y `vendedor` (empleado), con
+El comando crea los usuarios `admin`, `papa` (administradores) y `vendedor` (empleado), con
 la contraseña `supermoto2026`. **Cámbiala antes de darle el enlace al cliente** (Usuarios →
-editar, o `python manage.py changepassword dueno`).
+editar, o `python manage.py changepassword admin`).
 
 `etiquetas_demo.pdf` (en la carpeta de inicio, pestaña **Files**) trae 12 códigos de
 barras de productos del demo, para probar el escáner con la cámara (ver el guion del demo).

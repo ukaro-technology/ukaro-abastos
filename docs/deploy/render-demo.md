@@ -12,12 +12,12 @@ No hay que configurar nada a mano. Toma unos 10 minutos, casi todo esperando el 
 3. En el panel: **New → Blueprint** → elige el repositorio `ukaro-abastos`.
 4. Render muestra lo que va a crear: `supermoto-demo` (web) y `supermoto-db` (PostgreSQL),
    ambos en plan gratuito. Te pide un valor para **DEMO_PASSWORD**: es la contraseña de los
-   usuarios del demo (`dueno`, `papa`, `vendedor`). Pon una que no sea fácil de adivinar,
+   usuarios del demo (`admin`, `papa`, `vendedor`). Pon una que no sea fácil de adivinar,
    porque el enlace queda público en internet.
 5. **Apply**. El primer build tarda unos minutos. Al arrancar, el servidor aplica las
    migraciones y carga los datos de ejemplo (solo la primera vez, cuando la base está vacía).
 6. Abre el enlace del servicio (`https://supermoto-demo.onrender.com` o el que asigne Render
-   si ese nombre está tomado) e inicia sesión con `dueno` y tu DEMO_PASSWORD.
+   si ese nombre está tomado) e inicia sesión con `admin` y tu DEMO_PASSWORD.
 7. Pon la tasa BCV real del día en Configuración → Tasa de Cambio (el demo trae 200 Bs/$).
 
 El dominio de Render se agrega solo a `ALLOWED_HOSTS` y `CSRF_TRUSTED_ORIGINS` (variable
@@ -33,7 +33,7 @@ Render detecta el `Dockerfile` y crea un servicio Docker **sin** las variables d
    - `BUSINESS_PROFILE` = `motoparts`
    - `DEBUG` = `False`  ← importante: sin esto se ven errores con datos internos
    - `SECRET_KEY` = (botón *Generate*)
-   - `DEMO_PASSWORD` = la contraseña que quieras para `dueno`, `papa` y `vendedor`
+   - `DEMO_PASSWORD` = la contraseña que quieras para `admin`, `papa` y `vendedor`
 3. **Manual Deploy → Deploy latest commit**.
 
 El contenedor migra, junta los estáticos y carga el demo al arrancar

@@ -198,7 +198,7 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS(
             f'Demo cargado: {Product.objects.count()} productos, {Sale.objects.count()} ventas.\n'
-            f'Usuarios: dueno / papa (administradores), vendedor (empleado). '
+            f'Usuarios: admin / papa (administradores), vendedor (empleado). '
             f'Contraseña de todos: {"(la de DEMO_PASSWORD)" if os.environ.get("DEMO_PASSWORD") else DEFAULT_DEMO_PASSWORD}\n'
             f'Tasa BCV de ejemplo: {BCV_RATE} Bs/$ — actualízala en Configuración → Tasa de Cambio.'
         ))
@@ -207,7 +207,7 @@ class Command(BaseCommand):
     def create_users(self):
         users = {}
         for username, first, last, is_admin in [
-            ('dueno', 'Dueño', 'SuperMoto', True),
+            ('admin', 'Dueño', 'SuperMoto', True),
             ('papa', 'Papá', 'SuperMoto', True),
             ('vendedor', 'Vendedor', 'Demo', False),
         ]:
@@ -218,7 +218,7 @@ class Command(BaseCommand):
             user.set_password(os.environ.get('DEMO_PASSWORD') or DEFAULT_DEMO_PASSWORD)
             user.save()
             users[username] = user
-        return users['dueno']
+        return users['admin']
 
     def create_rate_and_settings(self, owner):
         today = datetime.now().date()
@@ -291,7 +291,7 @@ class Command(BaseCommand):
                     InventoryAdjustment.objects.create(
                         product=product, adjustment_type='set', quantity=product.stock,
                         previous_stock=Decimal('0'), new_stock=product.stock,
-                        reason='Stock inicial (datos de ejemplo)', adjusted_by=User.objects.get(username='dueno'),
+                        reason='Stock inicial (datos de ejemplo)', adjusted_by=User.objects.get(username='admin'),
                     )
                     # `stock + 10`: margen para las ventas del historial; al final queda `stock`
                     product._target_stock = stock
@@ -345,7 +345,7 @@ class Command(BaseCommand):
     # ------------------------------------------------------------------ ventas
     def create_sales(self, owner, products, customers):
         rng = self.rng
-        sellers = list(User.objects.filter(username__in=['dueno', 'papa', 'vendedor']))
+        sellers = list(User.objects.filter(username__in=['admin', 'papa', 'vendedor']))
         today = datetime.now().date()
         rates = {r.date: r.bs_to_usd for r in ExchangeRate.objects.all()}
         popular = [p for p in products if p.category.name in ('Frenos', 'Lubricantes', 'Bujías', 'Eléctrico', 'Filtros')]

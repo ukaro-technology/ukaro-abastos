@@ -32,7 +32,7 @@ services:
         value: "False"
       - key: SECRET_KEY
         generateValue: true
-      # Contraseña de los usuarios del demo (dueno, papa, vendedor): Render la pide al crear
+      # Contraseña de los usuarios del demo (admin, papa, vendedor): Render la pide al crear
       - key: DEMO_PASSWORD
         sync: false
       - key: DB_NAME

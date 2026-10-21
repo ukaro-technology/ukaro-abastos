@@ -4,7 +4,7 @@ Para mostrar el sistema desde el teléfono, en este orden. La idea es que el due
 día a día, no una lista de funciones.
 
 **Antes de la reunión**
-- Abre el enlace en tu teléfono, inicia sesión con `dueno` y deja la sesión abierta.
+- Abre el enlace en tu teléfono, inicia sesión con `admin` y deja la sesión abierta.
 - Pon la tasa BCV del día (Configuración → Tasa de Cambio).
 - Ten a mano `etiquetas_demo.pdf` (impreso o abierto en una laptop/tablet) para el escáner.
 - Revisa que el descuento en efectivo $ esté como lo quiere mostrar (Configuración →

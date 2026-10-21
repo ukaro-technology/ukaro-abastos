@@ -243,7 +243,7 @@ class SeedCommandTest(TestCase):
         call_command('seed_motoparts_demo', stdout=open(os.devnull, 'w'))
         self.assertGreater(Product.objects.count(), 100)
         self.assertTrue(Sale.objects.filter(payment_method='cash_usd', discount_usd__gt=0).exists())
-        self.assertTrue(User.objects.filter(username='dueno', is_admin=True).exists())
+        self.assertTrue(User.objects.filter(username='admin', is_admin=True).exists())
         # El guion del demo (docs/demo-supermoto-guion.md) usa este caucho de $30
         caucho = Product.objects.get(name='Caucho trasero 90/90-18')
         self.assertEqual(caucho.selling_price_usd, Decimal('30.00'))
@@ -261,4 +261,4 @@ class SeedCommandTest(TestCase):
     def test_demo_password_from_env(self):
         from django.core.management import call_command
         call_command('seed_motoparts_demo', stdout=open(os.devnull, 'w'))
-        self.assertTrue(User.objects.get(username='dueno').check_password('otra-clave'))
+        self.assertTrue(User.objects.get(username='admin').check_password('otra-clave'))
